@@ -95,12 +95,18 @@
   <section class="teaching-section" aria-labelledby="algorithm-teaching-title">
     <div class="teaching-header">
       <h2 id="algorithm-teaching-title">算法说明</h2>
-      <p>这个示教页把训练、评估和演示放在同一屏：先用“训练”让模型快速更新，再用“演示”观察当前策略在正常速度下的行为。统一记号：观察为 s，动作为 a，奖励为 r，折扣因子为 γ，参数为 θ；连续观察会被部分算法离散成表格状态 ŝ。</p>
+      <p>这个示教页把训练、评估和演示放在同一屏：先用“训练”让模型快速更新，再用“演示”观察当前策略在正常速度下的行为。</p>
+      <div class="notation-box">
+        <strong>📚 统一符号记号：</strong> 
+        状态/观察为 <code>s</code>，动作为 <code>a</code>，奖励为 <code>r</code>，折扣因子为 <code>γ</code>，模型参数为 <code>θ</code>。连续状态被表格型算法离散化为 <code>ŝ</code>。
+      </div>
     </div>
     <div class="algorithm-grid">
+      <!-- 进化与无梯度优化族 -->
       <article class="algorithm-card">
-        <h3>CEM 策略搜索</h3>
-        <p>CEM 不学习价值函数，而是直接搜索线性策略参数。页面里的策略对每个动作打分，然后选择分数最高的动作。</p>
+        <div class="card-badge evolution">进化计算</div>
+        <h3>CEM 交叉熵方法</h3>
+        <p>CEM 不学习价值函数，而是直接搜索线性的策略参数。网络给每个动作打分，然后贪心地选择最高分。</p>
         <div class="formula">
           <math display="block" aria-label="动作等于让线性策略分数最大的动作">
             <mi>a</mi>
@@ -153,12 +159,14 @@
             <mo>)</mo>
           </math>
         </div>
-        <p>每一代采样一个种群，跑完整回合得到适应度，保留精英集合 E，再把采样均值和方差移向精英。当前实现的适应度是距离加上得分奖励，适合 Flappy 和 Pong 这种短回合任务。</p>
-        <p class="watch-point">观察重点：候选个体表示当前代已经评估了多少策略；目标值是精英平均距离。CEM 内存占用很低，但样本效率取决于种群规模和精英数量。</p>
+        <p>评估每一代个体的距离与得分。保留表现最好的“精英”，并将正态分布的均值和标准差向精英收缩。收敛快，参数少，非常适合短回合的控制任务。</p>
+        <p class="watch-point"><strong>🔍 观察重点：</strong><span>候选个体代表代数进度，目标值是精英平均表现。它是此应用的强势基线。</span></p>
       </article>
+
       <article class="algorithm-card">
-        <h3>遗传算法</h3>
-        <p>遗传算法同样直接搜索线性策略，但它保留完整种群，通过精英保留、交叉和突变产生下一代，而不是拟合一个高斯分布。</p>
+        <div class="card-badge evolution">进化计算</div>
+        <h3>Genetic 遗传算法</h3>
+        <p>通过模拟自然界的进化、交叉与变异过程，来迭代出一个最优模型，适合解释直观的黑盒优化。</p>
         <div class="formula">
           <math display="block" aria-label="遗传算法保留适应度最高的精英集合">
             <mi>E</mi>
@@ -196,12 +204,14 @@
             <mo>(</mo><mn>0</mn><mo>,</mo><mi>I</mi><mo>)</mo>
           </math>
         </div>
-        <p>当前实现每代先复制精英，再从精英里抽父代做连续权重交叉，并以一定概率突变。它比 CEM 更贴近“选择、交叉、变异”的经典进化算法。</p>
-        <p class="watch-point">观察重点：目标值是精英平均距离；种群规模和精英数量决定探索宽度。它适合示教黑盒优化，但样本效率通常不如 CEM 稳定。</p>
+        <p>每一代优先保护精英个体复制，随后的子代在精英父母间进行权重插值（交叉），并带有一定的高斯噪声（变异）。</p>
+        <p class="watch-point"><strong>🔍 观察重点：</strong><span>不同于 CEM 的分布拟合，它保留个体多样性，但因为随机性更剧烈，有时候没有 CEM 收敛稳定。</span></p>
       </article>
+
       <article class="algorithm-card">
-        <h3>爬山搜索</h3>
-        <p>爬山搜索只维护当前最优策略，每次在它附近采样一个突变体；如果突变体表现更好，就接受它作为新的中心。</p>
+        <div class="card-badge search">局部搜索</div>
+        <h3>Hill Climbing 爬山搜索</h3>
+        <p>只维护单个当前最优策略，不断在其附近试探新解。如果变异体获得更高分数便“接纳”并取代最佳解，继续向山顶爬。</p>
         <div class="formula">
           <math display="block" aria-label="爬山搜索围绕当前最优参数采样突变体">
             <msup><mi>θ</mi><mo>′</mo></msup>
@@ -244,12 +254,14 @@
             <mo>)</mo>
           </math>
         </div>
-        <p>它是最容易理解的局部搜索基线：没有回放池、没有梯度，也没有种群交叉。缺点是容易陷入局部最优，早期突变尺度很关键。</p>
-        <p class="watch-point">观察重点：参数更新代表接受了多少次更优突变；目标值显示当前最优距离。它跑得很快，但探索能力弱于 CEM 和遗传算法。</p>
+        <p>不利用种群交叉和种群均值，资源开销极小。早期的突变范围极大决定了能否跳出局部困境。</p>
+        <p class="watch-point"><strong>🔍 观察重点：</strong><span>“参数更新”次数指示了爬山者前进了几步。它简单高速，却惊人地管用。</span></p>
       </article>
+
       <article class="algorithm-card">
-        <h3>随机搜索</h3>
-        <p>随机搜索完全不利用上一轮经验，每次独立采样一个线性策略并保留历史最好策略。它是所有策略搜索算法的朴素下界。</p>
+        <div class="card-badge baseline">弱基线</div>
+        <h3>Random 随机搜索</h3>
+        <p>随机“掷骰子”，每一代独立探索不相关的新参数。它是无梯度强化学习的一个最朴素的下界，用来验证环境难度。</p>
         <div class="formula">
           <math display="block" aria-label="随机搜索独立采样策略参数">
             <msub><mi>θ</mi><mi>i</mi></msub>
@@ -270,24 +282,15 @@
             <mo>(</mo><msub><mi>θ</mi><mi>i</mi></msub><mo>)</mo>
           </math>
         </div>
-        <div class="formula">
-          <math display="block" aria-label="适应度使用回合距离和得分">
-            <mi>F</mi>
-            <mo>(</mo><mi>θ</mi><mo>)</mo>
-            <mo>=</mo>
-            <mi>distance</mi>
-            <mo>+</mo>
-            <mn>1000</mn>
-            <mo>·</mo>
-            <mi>score</mi>
-          </math>
-        </div>
-        <p>这个算法故意简单，用来说明“只随机试”也能偶尔找到可用策略，但没有分布更新、交叉或价值学习，所以长期效率有限。</p>
-        <p class="watch-point">观察重点：如果随机搜索表现接近复杂算法，说明任务或奖励太容易；如果差距很大，就能直观看到学习机制的价值。</p>
+        <p>从始至终毫无“学习”可言，只靠运气撞见高分网络。其效率直接反映了求解空间中有用策略的密度。</p>
+        <p class="watch-point"><strong>🔍 观察重点：</strong><span>如果随机搜索跟复杂的 RL 表现差不多，那说明环境设计太简单，否则可以看出深度模型和优化算法的巨大贡献。</span></p>
       </article>
+
+      <!-- 深度价值学习 -->
       <article class="algorithm-card">
+        <div class="card-badge deep-rl">深度强化学习</div>
         <h3>Double DQN</h3>
-        <p>Double DQN 学习动作价值函数 Qθ(s,a)。在线网络负责选下一步动作，目标网络负责给这个动作估值，从而缓解普通 DQN 对最大值的过估计。</p>
+        <p>经典值函数方法，学习在状态 s 下执行各个动作 a 能带来的未来回报。利用目标网络缓解过高估计问题。</p>
         <div class="formula">
           <math display="block" aria-label="在线网络选择下一状态中的最大动作">
             <msup><mi>a</mi><mo>*</mo></msup>
@@ -336,12 +339,15 @@
             <mo>)</mo>
           </math>
         </div>
-        <p>当前实现使用 6 维观察输入、两层 MLP、经验回放池和目标网络。训练时先用 ε-greedy 收集样本，回放池达到预热数量后按批次抽样，用 Adam 优化 Huber 损失。</p>
-        <p class="watch-point">观察重点：回放池越大，批量训练越稳定；目标值显示 loss；评估曲线比训练最优更能反映当前策略是否真的会玩。</p>
+        <p>使用包含多层全连接神经层的网络结构和经验回放池，搭配 Adam 优化器完成学习，是非常主流的异策略学习。</p>
+        <p class="watch-point"><strong>🔍 观察重点：</strong><span>初期的预热和探索很重要；一旦 Loss 明显下降且 Q 值估计合理建立，评估曲线便会稳定上升。</span></p>
       </article>
+
+      <!-- 表格型强化学习学习 -->
       <article class="algorithm-card">
-        <h3>表格 Q-learning</h3>
-        <p>Q-learning 是最经典的离线价值迭代思想：把当前状态动作值向 Bellman 最优目标移动。本页面先把连续观察离散成表格索引 s#，再更新对应动作。</p>
+        <div class="card-badge tabular">表格型方法</div>
+        <h3>Tabular Q-learning</h3>
+        <p>离线(Off-policy)控制的先驱，将连续坐标简单粗暴地打上“网格”，用一张表记录每个格子的价值直接迭代。</p>
         <div class="formula">
           <math display="block" aria-label="Q-learning 的 TD 误差">
             <mi>δ</mi>
@@ -388,33 +394,14 @@
             <mi>δ</mi>
           </math>
         </div>
-        <div class="formula">
-          <math display="block" aria-label="探索率指数衰减">
-            <mi>ε</mi>
-            <mo>(</mo><mi>t</mi><mo>)</mo>
-            <mo>=</mo>
-            <msub><mi>ε</mi><mi>min</mi></msub>
-            <mo>+</mo>
-            <mo>(</mo>
-            <msub><mi>ε</mi><mi>start</mi></msub>
-            <mo>-</mo>
-            <msub><mi>ε</mi><mi>min</mi></msub>
-            <mo>)</mo>
-            <msup>
-              <mi>e</mi>
-              <mrow>
-                <mo>-</mo>
-                <mfrac><mi>t</mi><mi>decay</mi></mfrac>
-              </mrow>
-            </msup>
-          </math>
-        </div>
-        <p>它不需要神经网络，更新几乎没有额外内存成本。代价是状态分箱会丢掉连续位置、速度和误差的细节，所以在需要精细控制的地方容易卡住。</p>
-        <p class="watch-point">观察重点：探索率会随训练步数下降；目标值显示 TD 误差。若 TD 误差很小但评估仍差，通常说明状态离散化不足。</p>
+        <p>运算飞快，但连续空间的细节信息丢失严重（维数灾难导致不能切分太细），常在稍需精度的物理环境中折戟。</p>
+        <p class="watch-point"><strong>🔍 观察重点：</strong><span>可以用来感受“状态离散化”不足带来的学习瓶颈（即使 TD 近似完美，但在真实连续环境也会手忙脚乱）。</span></p>
       </article>
+
       <article class="algorithm-card">
+        <div class="card-badge tabular">表格型方法</div>
         <h3>SARSA</h3>
-        <p>SARSA 也是表格 TD 控制，但它是 on-policy：更新目标使用当前探索策略实际选出的下一动作，而不是直接取下一状态的最大 Q 值。</p>
+        <p>同策略的表格型 TD 控制方法。不仅用当下的策略来探索，对未来步价值的估计也用自身策略即将采样的动作。</p>
         <div class="formula">
           <math display="block" aria-label="SARSA 按当前策略选择下一动作">
             <msup><mi>a</mi><mo>′</mo></msup>
@@ -469,12 +456,14 @@
             <mi>δ</mi>
           </math>
         </div>
-        <p>它和 Q-learning 代码结构几乎一样，但目标更保守，因为下一动作仍带有探索噪声。教学上可以用它观察 on-policy 与 off-policy 的差异。</p>
-        <p class="watch-point">观察重点：探索率和 TD 误差含义与 Q-learning 相同；若 SARSA 更稳但上限更低，通常是探索策略影响了学习目标。</p>
+        <p>由于考虑到自身的探索噪音存在危险，所以它算出的动作常常比 Q-learning 更加“保守”和安全。</p>
+        <p class="watch-point"><strong>🔍 观察重点：</strong><span>结合 Q-learning 比较同/异策略行为，SARSA 相对显得谨慎稳妥但学习上限受探索策略拖累。</span></p>
       </article>
+
       <article class="algorithm-card">
+        <div class="card-badge pg-rl">策略梯度</div>
         <h3>REINFORCE</h3>
-        <p>REINFORCE 直接优化随机策略。它先按策略采样完整轨迹，再用每一步之后的折扣回报给动作概率做加权。</p>
+        <p>策略梯度的开山之作，直面目标函数的预期回报优化：让网络直接吐出选择各动作的概率值然后按轮加权反传。</p>
         <div class="formula">
           <math display="block" aria-label="REINFORCE 使用 softmax 随机策略">
             <msub><mi>π</mi><mi>θ</mi></msub>
@@ -523,9 +512,9 @@
             <mo>)</mo>
           </math>
         </div>
-        <p>当前实现每个回合结束后统一反传一次，用 Adam 更新线性 softmax 策略。它概念清晰，但没有 baseline，回报方差比 DQN 高，训练曲线会更抖。</p>
-        <p class="watch-point">观察重点：回合长度表示当前正在收集的轨迹长度；目标值是本回合起点回报。用它理解策略梯度，比指望它最快通关更合适。</p>
+        <p>简单纯粹的方法。没有 Baseline 函数来稳固方差，在具有高度不确定性的玩具环境中往往震荡十分严重。</p>
+        <p class="watch-point"><strong>🔍 观察重点：</strong><span>重点用于观摩和理解策略网络更新原理；想要高效通关或得到稳固路线不如使用其他方法。</span></p>
       </article>
     </div>
   </section>
-`;var i=D(`game-canvas`),a=D(`chart-canvas`),o=k(i),s=k(a),c=O(`toggle-run`),l=O(`toggle-demo`),u=O(`reset-run`),d=Array.from(document.querySelectorAll(`[data-environment]`)),f=e(),p={running:!1,demoRunning:!1,stats:{environment:f.environment,algorithm:f.algorithm,steps:0,episodes:0,updates:0,workItem:0,bestDistance:0,bestEvalDistance:0,objective:0,exploration:f.initialStd,replaySize:0,sps:0},render:null,evalHistory:[]};E(`population-size`,`population-size-output`,``,e=>{h({populationSize:e})}),E(`elite-size`,`elite-size-output`,``,e=>{h({eliteSize:e})}),E(`max-episode-steps`,`max-episode-steps-output`,``,e=>{h({maxEpisodeSteps:e})}),E(`learning-rate`,`learning-rate-output`,``,e=>{h({learningRate:e})}),E(`epsilon-decay`,`epsilon-decay-output`,``,e=>{h({epsilonDecaySteps:e})}),E(`batch-size`,`batch-size-output`,``,e=>{h({batchSize:e})}),E(`train-budget`,`train-budget-output`,` ms`,e=>{h({trainBudgetMs:e})});for(let e of d)e.addEventListener(`click`,()=>{let t=e.dataset.environment;!t||t===f.environment||h({environment:t})});var m=document.getElementById(`algorithm-select`);if(!(m instanceof HTMLSelectElement))throw Error(`Missing algorithm select`);m.addEventListener(`change`,()=>{h({algorithm:m.value})}),c.addEventListener(`click`,()=>{n.postMessage({type:p.running?`pause`:`start`})}),l.addEventListener(`click`,()=>{n.postMessage({type:p.demoRunning?`pause-demo`:`start-demo`})}),u.addEventListener(`click`,()=>{n.postMessage({type:`reset`,config:f})}),n.onmessage=e=>{let t=e.data;t.type===`state`&&(p.running=t.running,p.demoRunning=t.demoRunning,p.stats=t.stats,p.render=t.render,p.evalHistory=t.evalHistory,g(),w(s,a,p.evalHistory,p.stats.environment))},_(f.environment),n.postMessage({type:`reset`,config:f}),requestAnimationFrame(b);function h(e){Object.assign(f,e),n.postMessage({type:`config`,config:e})}function g(){c.textContent=p.running?`暂停训练`:`训练`,l.textContent=p.demoRunning?`停止演示`:`演示`,l.classList.toggle(`secondary-active`,p.demoRunning),A(`steps`,j(p.stats.steps)),A(`episodes`,j(p.stats.episodes)),A(`updates`,j(p.stats.updates)),A(`work-item`,j(p.stats.workItem)),A(`best-distance`,p.stats.bestDistance.toFixed(0)),A(`best-eval`,p.stats.bestEvalDistance.toFixed(0)),A(`objective`,p.stats.objective.toFixed(3)),A(`sps`,p.stats.sps.toFixed(0)),v(p.stats),_(p.stats.environment)}function _(e){let n=t[e];A(`environment-title`,n.title),A(`environment-description`,n.description),i.setAttribute(`aria-label`,n.canvasLabel),a.setAttribute(`aria-label`,`训练过程中的评估${n.chartLabel}`);for(let t of d){let n=t.dataset.environment===e;t.classList.toggle(`active`,n),t.setAttribute(`aria-pressed`,String(n))}}function v(e){A(`algorithm-note`,{cem:`CEM 通过采样一批线性策略、保留精英样本并更新采样分布来直接优化策略。`,genetic:`遗传算法保留精英策略，通过交叉和突变产生下一代线性策略。`,"hill-climb":`爬山搜索只围绕当前最优策略做高斯突变，并接受表现更好的突变体。`,"random-search":`随机搜索独立采样线性策略，只保留历史表现最好的策略作为演示模型。`,"double-dqn":`Double DQN 使用经验回放、在线网络和目标网络来学习动作价值函数。`,"q-learning":`表格 Q-learning 将观察离散化后，用 Bellman 最优性更新学习动作价值。`,sarsa:`SARSA 使用当前探索策略实际选择的下一动作来做 on-policy TD 更新。`,reinforce:`REINFORCE 从完整回合估计折扣回报，并用策略梯度更新随机策略。`}[e.algorithm]),A(`work-label`,{cem:`候选个体`,genetic:`候选个体`,"hill-climb":`突变尝试`,"random-search":`随机尝试`,"double-dqn":`回放池`,"q-learning":`探索率`,sarsa:`探索率`,reinforce:`回合长度`}[e.algorithm]),A(`objective-label`,{cem:`精英均值`,genetic:`精英均值`,"hill-climb":`当前最优`,"random-search":`当前最优`,"double-dqn":`损失`,"q-learning":`TD 误差`,sarsa:`TD 误差`,reinforce:`回报`}[e.algorithm]),A(`control-title`,{cem:`CEM 参数`,genetic:`遗传算法参数`,"hill-climb":`爬山搜索参数`,"random-search":`随机搜索参数`,"double-dqn":`Double DQN 参数`,"q-learning":`Q-learning 参数`,sarsa:`SARSA 参数`,reinforce:`REINFORCE 参数`}[e.algorithm]),y(e.algorithm)}function y(e){let t=e===`cem`||e===`genetic`||e===`hill-climb`||e===`random-search`,n=e===`cem`||e===`genetic`,r=e===`double-dqn`||e===`q-learning`||e===`sarsa`,i=e===`double-dqn`||e===`reinforce`,a=e===`double-dqn`;for(let e of document.querySelectorAll(`.population-control`))e.hidden=!t;for(let e of document.querySelectorAll(`.elite-control`))e.hidden=!n;for(let e of document.querySelectorAll(`.value-control`))e.hidden=!r;for(let e of document.querySelectorAll(`.gradient-control`))e.hidden=!i;for(let e of document.querySelectorAll(`.dqn-control`))e.hidden=!a}function b(){x(o,i,p.render),requestAnimationFrame(b)}function x(e,t,n){n?.kind===`pong`||!n&&f.environment===`pong`?C(e,t,n?.kind===`pong`?n:null):S(e,t,n?.kind===`flappy`?n:null)}function S(e,t,n){let r=t.width,i=t.height;if(e.clearRect(0,0,r,i),e.save(),e.scale(r/800,i/600),e.fillStyle=`#d8edf5`,e.fillRect(0,0,800,600),e.fillStyle=`#806f51`,e.fillRect(0,500,800,100),e.fillStyle=`#5a8d3d`,e.fillRect(0,500,800,10),n){let t=280-n.x;e.save(),e.translate(t,0),e.fillStyle=`#1e9e56`;for(let t of n.pipes)T(e,t.x,0,60,t.gapY,4),e.fill(),T(e,t.x,t.gapY+160,60,500-t.gapY-160,4),e.fill(),e.fillStyle=`#157a43`,e.fillRect(t.x-4,t.gapY-16,68,16),e.fillRect(t.x-4,t.gapY+160,68,16),e.fillStyle=`#1e9e56`;e.fillStyle=`#d64d36`,T(e,n.x,n.y,30,30,6),e.fill(),e.fillStyle=`#fff4c7`,e.fillRect(n.x+19,n.y+8,6,5),e.restore(),e.fillStyle=`rgba(18, 28, 36, 0.78)`,e.font=`600 15px Inter, system-ui, sans-serif`,e.fillText(`得分 ${n.score}`,24,34),e.fillText(`奖励 ${n.lastReward.toFixed(3)}`,24,58)}e.restore()}function C(e,t,n){let r=t.width,i=t.height;e.clearRect(0,0,r,i),e.save(),e.scale(r/800,i/600),e.fillStyle=`#15202a`,e.fillRect(0,0,800,600),e.fillStyle=`#dce6ed`,e.globalAlpha=.28;for(let t=18;t<600;t+=36)e.fillRect(800/2-2,t,4,18);e.globalAlpha=1,e.strokeStyle=`#314350`,e.lineWidth=8,e.strokeRect(4,4,792,592);let a=n?.paddleY??508/2,o=n?.ballX??800*.58,s=n?.ballY??600/2,c=n?.score??0,l=n?.lastReward??0;e.fillStyle=`#f0f6fb`,T(e,36,a,16,92,5),e.fill(),e.fillStyle=`#d64d36`,T(e,o-10,s-10,20,20,10),e.fill(),e.fillStyle=`rgba(247, 251, 255, 0.86)`,e.font=`600 15px Inter, system-ui, sans-serif`,e.fillText(`得分 ${c}`,24,34),e.fillText(`奖励 ${l.toFixed(3)}`,24,58),e.restore()}function w(e,n,r,i){let a=n.width,o=n.height;if(e.clearRect(0,0,a,o),e.fillStyle=`#ffffff`,e.fillRect(0,0,a,o),e.strokeStyle=`#d5dde5`,e.lineWidth=1,e.strokeRect(46,20,a-46-18,o-20-34),e.fillStyle=`#6a7580`,e.font=`12px Inter, system-ui, sans-serif`,e.fillText(t[i].chartLabel,10,18),e.fillText(`步数`,a-46,o-10),r.length<2){e.fillStyle=`#8c98a4`,e.font=`500 14px Inter, system-ui, sans-serif`,e.fillText(`等待评估`,62,54);return}let s=r[0].step,c=r[r.length-1].step,l=Math.max(500,...r.map(e=>e.distance)),u=a-46-18,d=o-20-34;e.beginPath(),r.forEach((t,n)=>{let r=46+(t.step-s)/Math.max(1,c-s)*u,i=20+d-t.distance/l*d;n===0?e.moveTo(r,i):e.lineTo(r,i)}),e.strokeStyle=`#d64d36`,e.lineWidth=2.5,e.stroke(),e.fillStyle=`#28323b`,e.fillText(l.toFixed(0),8,28),e.fillText(r[r.length-1].distance.toFixed(0),a-58,38)}function T(e,t,n,r,i,a){let o=Math.min(a,r/2,i/2);e.beginPath(),e.moveTo(t+o,n),e.lineTo(t+r-o,n),e.quadraticCurveTo(t+r,n,t+r,n+o),e.lineTo(t+r,n+i-o),e.quadraticCurveTo(t+r,n+i,t+r-o,n+i),e.lineTo(t+o,n+i),e.quadraticCurveTo(t,n+i,t,n+i-o),e.lineTo(t,n+o),e.quadraticCurveTo(t,n,t+o,n),e.closePath()}function E(e,t,n,r){let i=document.getElementById(e),a=document.getElementById(t);if(!(i instanceof HTMLInputElement)||!(a instanceof HTMLOutputElement))throw Error(`Missing range control ${e}`);let o=()=>{let e=Number(i.value);a.textContent=`${e}${n}`,r(e)};i.addEventListener(`input`,o),o()}function D(e){let t=document.getElementById(e);if(!(t instanceof HTMLCanvasElement))throw Error(`Missing canvas ${e}`);return t}function O(e){let t=document.getElementById(e);if(!(t instanceof HTMLButtonElement))throw Error(`Missing button ${e}`);return t}function k(e){let t=e.getContext(`2d`);if(!t)throw Error(`Canvas 2D context is unavailable`);return t}function A(e,t){let n=document.getElementById(e);n&&(n.textContent=t)}function j(e){return new Intl.NumberFormat(`en-US`,{maximumFractionDigits:0}).format(e)}
+`;var i=D(`game-canvas`),a=D(`chart-canvas`),o=k(i),s=k(a),c=O(`toggle-run`),l=O(`toggle-demo`),u=O(`reset-run`),d=Array.from(document.querySelectorAll(`[data-environment]`)),f=e(),p={running:!1,demoRunning:!1,stats:{environment:f.environment,algorithm:f.algorithm,steps:0,episodes:0,updates:0,workItem:0,bestDistance:0,bestEvalDistance:0,objective:0,exploration:f.initialStd,replaySize:0,sps:0},render:null,evalHistory:[]};E(`population-size`,`population-size-output`,``,e=>{h({populationSize:e})}),E(`elite-size`,`elite-size-output`,``,e=>{h({eliteSize:e})}),E(`max-episode-steps`,`max-episode-steps-output`,``,e=>{h({maxEpisodeSteps:e})}),E(`learning-rate`,`learning-rate-output`,``,e=>{h({learningRate:e})}),E(`epsilon-decay`,`epsilon-decay-output`,``,e=>{h({epsilonDecaySteps:e})}),E(`batch-size`,`batch-size-output`,``,e=>{h({batchSize:e})}),E(`train-budget`,`train-budget-output`,` ms`,e=>{h({trainBudgetMs:e})});for(let e of d)e.addEventListener(`click`,()=>{let t=e.dataset.environment;!t||t===f.environment||h({environment:t})});var m=document.getElementById(`algorithm-select`);if(!(m instanceof HTMLSelectElement))throw Error(`Missing algorithm select`);m.addEventListener(`change`,()=>{h({algorithm:m.value})}),c.addEventListener(`click`,()=>{n.postMessage({type:p.running?`pause`:`start`})}),l.addEventListener(`click`,()=>{n.postMessage({type:p.demoRunning?`pause-demo`:`start-demo`})}),u.addEventListener(`click`,()=>{n.postMessage({type:`reset`,config:f})}),n.onmessage=e=>{let t=e.data;t.type===`state`&&(p.running=t.running,p.demoRunning=t.demoRunning,p.stats=t.stats,p.render=t.render,p.evalHistory=t.evalHistory,g(),w(s,a,p.evalHistory,p.stats.environment))},_(f.environment),n.postMessage({type:`reset`,config:f}),requestAnimationFrame(b);function h(e){Object.assign(f,e),n.postMessage({type:`config`,config:e})}function g(){c.textContent=p.running?`暂停训练`:`训练`,l.textContent=p.demoRunning?`停止演示`:`演示`,l.classList.toggle(`secondary-active`,p.demoRunning),A(`steps`,j(p.stats.steps)),A(`episodes`,j(p.stats.episodes)),A(`updates`,j(p.stats.updates)),A(`work-item`,j(p.stats.workItem)),A(`best-distance`,p.stats.bestDistance.toFixed(0)),A(`best-eval`,p.stats.bestEvalDistance.toFixed(0)),A(`objective`,p.stats.objective.toFixed(3)),A(`sps`,p.stats.sps.toFixed(0)),v(p.stats),_(p.stats.environment)}function _(e){let n=t[e];A(`environment-title`,n.title),A(`environment-description`,n.description),i.setAttribute(`aria-label`,n.canvasLabel),a.setAttribute(`aria-label`,`训练过程中的评估${n.chartLabel}`);for(let t of d){let n=t.dataset.environment===e;t.classList.toggle(`active`,n),t.setAttribute(`aria-pressed`,String(n))}}function v(e){A(`algorithm-note`,{cem:`CEM 通过采样一批线性策略、保留精英样本并更新采样分布来直接优化策略。`,genetic:`遗传算法保留精英策略，通过交叉和突变产生下一代线性策略。`,"hill-climb":`爬山搜索只围绕当前最优策略做高斯突变，并接受表现更好的突变体。`,"random-search":`随机搜索独立采样线性策略，只保留历史表现最好的策略作为演示模型。`,"double-dqn":`Double DQN 使用经验回放、在线网络和目标网络来学习动作价值函数。`,"q-learning":`表格 Q-learning 将观察离散化后，用 Bellman 最优性更新学习动作价值。`,sarsa:`SARSA 使用当前探索策略实际选择的下一动作来做 on-policy TD 更新。`,reinforce:`REINFORCE 从完整回合估计折扣回报，并用策略梯度更新随机策略。`}[e.algorithm]),A(`work-label`,{cem:`候选个体`,genetic:`候选个体`,"hill-climb":`突变尝试`,"random-search":`随机尝试`,"double-dqn":`回放池`,"q-learning":`探索率`,sarsa:`探索率`,reinforce:`回合长度`}[e.algorithm]),A(`objective-label`,{cem:`精英均值`,genetic:`精英均值`,"hill-climb":`当前最优`,"random-search":`当前最优`,"double-dqn":`损失`,"q-learning":`TD 误差`,sarsa:`TD 误差`,reinforce:`回报`}[e.algorithm]),A(`control-title`,{cem:`CEM 参数`,genetic:`遗传算法参数`,"hill-climb":`爬山搜索参数`,"random-search":`随机搜索参数`,"double-dqn":`Double DQN 参数`,"q-learning":`Q-learning 参数`,sarsa:`SARSA 参数`,reinforce:`REINFORCE 参数`}[e.algorithm]),y(e.algorithm)}function y(e){let t=e===`cem`||e===`genetic`||e===`hill-climb`||e===`random-search`,n=e===`cem`||e===`genetic`,r=e===`double-dqn`||e===`q-learning`||e===`sarsa`,i=e===`double-dqn`||e===`reinforce`,a=e===`double-dqn`;for(let e of document.querySelectorAll(`.population-control`))e.hidden=!t;for(let e of document.querySelectorAll(`.elite-control`))e.hidden=!n;for(let e of document.querySelectorAll(`.value-control`))e.hidden=!r;for(let e of document.querySelectorAll(`.gradient-control`))e.hidden=!i;for(let e of document.querySelectorAll(`.dqn-control`))e.hidden=!a}function b(){x(o,i,p.render),requestAnimationFrame(b)}function x(e,t,n){n?.kind===`pong`||!n&&f.environment===`pong`?C(e,t,n?.kind===`pong`?n:null):S(e,t,n?.kind===`flappy`?n:null)}function S(e,t,n){let r=t.width,i=t.height;if(e.clearRect(0,0,r,i),e.save(),e.scale(r/800,i/600),e.fillStyle=`#d8edf5`,e.fillRect(0,0,800,600),e.fillStyle=`#806f51`,e.fillRect(0,500,800,100),e.fillStyle=`#5a8d3d`,e.fillRect(0,500,800,10),n){let t=280-n.x;e.save(),e.translate(t,0),e.fillStyle=`#1e9e56`;for(let t of n.pipes)T(e,t.x,0,60,t.gapY,4),e.fill(),T(e,t.x,t.gapY+160,60,500-t.gapY-160,4),e.fill(),e.fillStyle=`#157a43`,e.fillRect(t.x-4,t.gapY-16,68,16),e.fillRect(t.x-4,t.gapY+160,68,16),e.fillStyle=`#1e9e56`;e.fillStyle=`#d64d36`,T(e,n.x,n.y,30,30,6),e.fill(),e.fillStyle=`#fff4c7`,e.fillRect(n.x+19,n.y+8,6,5),e.restore(),e.fillStyle=`rgba(18, 28, 36, 0.78)`,e.font=`600 15px Inter, system-ui, sans-serif`,e.fillText(`得分 ${n.score}`,24,34),e.fillText(`奖励 ${n.lastReward.toFixed(3)}`,24,58)}e.restore()}function C(e,t,n){let r=t.width,i=t.height;e.clearRect(0,0,r,i),e.save(),e.scale(r/800,i/600),e.fillStyle=`#15202a`,e.fillRect(0,0,800,600),e.fillStyle=`#dce6ed`,e.globalAlpha=.28;for(let t=18;t<600;t+=36)e.fillRect(800/2-2,t,4,18);e.globalAlpha=1,e.strokeStyle=`#314350`,e.lineWidth=8,e.strokeRect(4,4,792,592);let a=n?.paddleY??508/2,o=n?.ballX??800*.58,s=n?.ballY??600/2,c=n?.score??0,l=n?.lastReward??0;e.fillStyle=`#f0f6fb`,T(e,36,a,16,92,5),e.fill(),e.fillStyle=`#d64d36`,T(e,o-10,s-10,20,20,10),e.fill(),e.fillStyle=`rgba(247, 251, 255, 0.86)`,e.font=`600 15px Inter, system-ui, sans-serif`,e.fillText(`得分 ${c}`,24,34),e.fillText(`奖励 ${l.toFixed(3)}`,24,58),e.restore()}function w(e,n,r,i){let a=n.width,o=n.height;if(e.clearRect(0,0,a,o),e.fillStyle=`#ffffff`,e.fillRect(0,0,a,o),e.strokeStyle=`#d5dde5`,e.lineWidth=1,e.strokeRect(46,20,a-46-18,o-20-34),e.fillStyle=`#6a7580`,e.font=`12px Inter, system-ui, sans-serif`,e.fillText(t[i].chartLabel,10,18),e.fillText(`步数`,a-46,o-10),r.length<2){e.fillStyle=`#8c98a4`,e.font=`500 14px Inter, system-ui, sans-serif`,e.fillText(`等待评估`,62,54);return}let s=r[0].step,c=r[r.length-1].step,l=Math.max(500,...r.map(e=>e.distance)),u=a-46-18,d=o-20-34;e.strokeStyle=`#eef2f6`,e.lineWidth=1,e.beginPath();for(let t=1;t<4;t++){let n=20+d-d*t/4;e.moveTo(46,n),e.lineTo(46+u,n)}e.stroke();let f=.15,p=r.length>0?r[0].distance:0,m=r.map(e=>(p=p*(1-f)+e.distance*f,{step:e.step,distance:p})),h=new Path2D;r.forEach((e,t)=>{let n=46+(e.step-s)/Math.max(1,c-s)*u,r=20+d-e.distance/l*d;t===0?h.moveTo(n,r):h.lineTo(n,r)}),e.strokeStyle=`rgba(214, 77, 54, 0.25)`,e.lineWidth=1,e.stroke(h);let g=new Path2D;if(m.forEach((e,t)=>{let n=46+(e.step-s)/Math.max(1,c-s)*u,r=20+d-e.distance/l*d;t===0?g.moveTo(n,r):g.lineTo(n,r)}),m.length>0){let t=new Path2D(g),n=46+(m[m.length-1].step-s)/Math.max(1,c-s)*u;t.lineTo(n,20+d),t.lineTo(46,20+d),t.closePath();let r=e.createLinearGradient(0,20,0,20+d);r.addColorStop(0,`rgba(214, 77, 54, 0.25)`),r.addColorStop(1,`rgba(214, 77, 54, 0.0)`),e.fillStyle=r,e.fill(t)}e.strokeStyle=`#d64d36`,e.lineWidth=2.5,e.stroke(g),e.fillStyle=`#28323b`,e.fillText(l.toFixed(0),8,28);for(let t=1;t<4;t++){let n=(l*t/4).toFixed(0),r=20+d-d*t/4+4;e.fillText(n,8,r)}e.fillText(r[r.length-1].distance.toFixed(0),a-58,38)}function T(e,t,n,r,i,a){let o=Math.min(a,r/2,i/2);e.beginPath(),e.moveTo(t+o,n),e.lineTo(t+r-o,n),e.quadraticCurveTo(t+r,n,t+r,n+o),e.lineTo(t+r,n+i-o),e.quadraticCurveTo(t+r,n+i,t+r-o,n+i),e.lineTo(t+o,n+i),e.quadraticCurveTo(t,n+i,t,n+i-o),e.lineTo(t,n+o),e.quadraticCurveTo(t,n,t+o,n),e.closePath()}function E(e,t,n,r){let i=document.getElementById(e),a=document.getElementById(t);if(!(i instanceof HTMLInputElement)||!(a instanceof HTMLOutputElement))throw Error(`Missing range control ${e}`);let o=()=>{let e=Number(i.value);a.textContent=`${e}${n}`,r(e)};i.addEventListener(`input`,o),o()}function D(e){let t=document.getElementById(e);if(!(t instanceof HTMLCanvasElement))throw Error(`Missing canvas ${e}`);return t}function O(e){let t=document.getElementById(e);if(!(t instanceof HTMLButtonElement))throw Error(`Missing button ${e}`);return t}function k(e){let t=e.getContext(`2d`);if(!t)throw Error(`Canvas 2D context is unavailable`);return t}function A(e,t){let n=document.getElementById(e);n&&(n.textContent=t)}function j(e){return new Intl.NumberFormat(`en-US`,{maximumFractionDigits:0}).format(e)}
