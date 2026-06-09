@@ -8,7 +8,11 @@ import { createRuntimeTrainer } from "../src/standardAlgorithms.ts";
 
 const targetSteps = Number(process.argv[2] ?? 30000);
 const algorithm = (process.argv[3] ?? "cem") as AlgorithmId;
-const environment = (process.argv[4] ?? "flappy") as EnvironmentId;
+const environmentArg = process.argv[4] ?? "flappy";
+if (environmentArg !== "flappy" && environmentArg !== "pong") {
+  throw new Error(`Unsupported environment "${environmentArg}". Expected "flappy" or "pong".`);
+}
+const environment = environmentArg as EnvironmentId;
 const config: TrainingConfig = {
   ...defaultTrainingConfig(),
   algorithm,
@@ -28,10 +32,11 @@ const memory =
     ? process.memoryUsage()
     : { heapUsed: 0, rss: 0 };
 
-const passedTeachingTarget =
-  environment === "flappy"
-    ? finalStats.bestEvalDistance >= 560
-    : finalStats.bestEvalDistance >= 1000;
+const teachingTargets: Record<EnvironmentId, number> = {
+  flappy: 560,
+  pong: 1000
+};
+const passedTeachingTarget = finalStats.bestEvalDistance >= teachingTargets[environment];
 
 console.log(
   JSON.stringify(

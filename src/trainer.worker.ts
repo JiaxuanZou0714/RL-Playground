@@ -14,7 +14,7 @@ type WorkerScope = {
   postMessage(message: TrainerUpdate): void;
 };
 
-const scope = globalThis as unknown as WorkerScope;
+const scope = self as WorkerScope;
 
 let config = defaultTrainingConfig();
 let trainer: RuntimeTrainer = createRuntimeTrainer(config);

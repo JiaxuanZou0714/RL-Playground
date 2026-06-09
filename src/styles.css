@@ -45,7 +45,6 @@
   line-height: 1.5;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -294,7 +293,6 @@ button.secondary-active {
 .metrics {
   padding: 10px 14px 6px;
   display: grid;
-  gap: 0;
   align-content: start;
 }
 
@@ -304,7 +302,6 @@ button.secondary-active {
   color: var(--ink-soft);
   padding-bottom: 8px;
   border-bottom: 1px solid var(--line);
-  margin-bottom: 0;
 }
 
 .metric {
@@ -390,23 +387,8 @@ select {
 .panel-section input[type="range"] {
   grid-column: 1 / -1;
   width: 100%;
-  min-height: 18px;
   accent-color: var(--accent);
   cursor: pointer;
-}
-
-.panel-section input[type="range"]::-webkit-slider-runnable-track {
-  height: 3px;
-  border-radius: 999px;
-  background: var(--line-strong);
-}
-
-.panel-section input[type="range"]::-webkit-slider-thumb { margin-top: -5px; }
-
-.panel-section input[type="range"]::-moz-range-track {
-  height: 3px;
-  border-radius: 999px;
-  background: var(--line-strong);
 }
 
 output {
@@ -441,11 +423,11 @@ output {
   color: var(--ink-soft);
 }
 
-#chart-canvas {
+#chart-svg {
   width: 100%;
   display: block;
-  border: 0;
   border-top: 1px solid var(--line);
+  font-family: "Inter", ui-sans-serif, sans-serif;
 }
 
 /* ── Teaching section ── */
@@ -545,8 +527,6 @@ output {
   font-size: 12px;
   color: var(--ink-soft);
   line-height: 1.5;
-  margin: 0;
-  max-width: 100%;
 }
 
 /* Category color: label + dot only */
@@ -593,7 +573,6 @@ output {
   color: var(--ink-muted);
   line-height: 1.7;
   max-width: 100%;
-  margin-top: 0;
 }
 
 .formula {
@@ -619,7 +598,6 @@ output {
 .watch-point {
   margin-top: auto;
   padding-top: 10px;
-  margin-top: 10px;
   display: grid;
   grid-template-columns: 48px 1fr;
   gap: 8px;
@@ -643,7 +621,6 @@ output {
 .algo-group.tabular   .watch-point strong { color: var(--cat-tab); }
 .algo-group.pg-rl     .watch-point strong { color: var(--cat-pg); }
 
-.watch-point span { display: block; }
 
 /* ── Responsive ── */
 @media (max-width: 1220px) {

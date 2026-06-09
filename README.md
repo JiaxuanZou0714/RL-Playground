@@ -39,10 +39,15 @@ See `ALGORITHMS.md` for implementation notes and the current baseline.
 
 ## Project Structure
 
-- `src/rl.ts`: environments, shared types, and CEM core
-- `src/standardAlgorithms.ts`: Double DQN, Q-learning, REINFORCE, and runtime wrappers
+- `src/rl.ts`: shared types, constants, and Flappy/Pong environments
+- `src/cem.ts`: CEM policy search and linear policy utilities
+- `src/standardAlgorithms.ts`: genetic search, hill climbing, random search, Double DQN, Q-learning, SARSA, REINFORCE, and runtime wrappers
+- `src/learningCore.ts`: replay buffer, MLP, policy helpers, tabular helpers, and optimizer math
 - `src/trainer.worker.ts`: worker entrypoint that keeps training off the UI thread
-- `src/main.ts`: app shell, controls, canvas rendering, and chart rendering
+- `src/main.ts`: app state, worker wiring, controls, and event handling
+- `src/uiContent.ts`: app template plus environment and algorithm copy
+- `src/rendering.ts`: canvas simulation rendering and SVG chart rendering
+- `src/dom.ts`: typed DOM helpers and range-control binding
 - `docs/`: GitHub Pages production output
 
 ## Local Development
@@ -83,9 +88,9 @@ Run all included algorithms:
 npm run bench:all
 ```
 
-Current 30k-step baseline on this machine:
+Current baseline on this machine:
 
-| Environment | Algorithm | 30k eval metric | Teaching target | Notes |
+| Environment | Algorithm | Eval metric | Teaching target | Notes |
 | --- | --- | ---: | --- | --- |
 | Flappy Bird | CEM policy search | ~1131 | yes | Fast, low-memory policy-search baseline |
 | Flappy Bird | Genetic algorithm | ~977 | yes | Elite selection, crossover, and mutation |
