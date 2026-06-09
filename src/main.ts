@@ -967,23 +967,59 @@ function drawChart(
   const plotWidth = width - left - right;
   const plotHeight = height - top - bottom;
 
+  // 绘制网格线
+  context.strokeStyle = "#eef2f6";
+  context.lineWidth = 1;
   context.beginPath();
+  for (let i = 1; i < 4; i++) {
+    const y = top + plotHeight - (plotHeight * i) / 4;
+    context.moveTo(left, y);
+    context.lineTo(left + plotWidth, y);
+  }
+  context.stroke();
+
+  // 建立曲线路径
+  const path = new Path2D();
   points.forEach((point, index) => {
     const x =
       left + ((point.step - minStep) / Math.max(1, maxStep - minStep)) * plotWidth;
     const y = top + plotHeight - (point.distance / maxDistance) * plotHeight;
     if (index === 0) {
-      context.moveTo(x, y);
+      path.moveTo(x, y);
     } else {
-      context.lineTo(x, y);
+      path.lineTo(x, y);
     }
   });
+
+  // 绘制渐变填充背景
+  if (points.length > 0) {
+    const fillPath = new Path2D(path);
+    const lastPoint = points[points.length - 1];
+    const lastX = left + ((lastPoint.step - minStep) / Math.max(1, maxStep - minStep)) * plotWidth;
+    fillPath.lineTo(lastX, top + plotHeight);
+    fillPath.lineTo(left, top + plotHeight);
+    fillPath.closePath();
+
+    const gradient = context.createLinearGradient(0, top, 0, top + plotHeight);
+    gradient.addColorStop(0, "rgba(214, 77, 54, 0.25)");
+    gradient.addColorStop(1, "rgba(214, 77, 54, 0.0)");
+    context.fillStyle = gradient;
+    context.fill(fillPath);
+  }
+
+  // 绘制折线
   context.strokeStyle = "#d64d36";
   context.lineWidth = 2.5;
-  context.stroke();
+  context.stroke(path);
 
+  // 绘制 X 和 Y 轴标识
   context.fillStyle = "#28323b";
   context.fillText(maxDistance.toFixed(0), 8, top + 8);
+  for (let i = 1; i < 4; i++) {
+    const textVal = ((maxDistance * i) / 4).toFixed(0);
+    const y = top + plotHeight - (plotHeight * i) / 4 + 4;
+    context.fillText(textVal, 8, y);
+  }
   context.fillText(points[points.length - 1].distance.toFixed(0), width - 58, top + 18);
 }
 
