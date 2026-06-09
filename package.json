@@ -1,0 +1,18 @@
+{
+  "name": "rl-playground-modern",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "bench": "node --experimental-transform-types scripts/bench.ts",
+    "bench:flappy": "npm run bench --",
+    "bench:pong": "npm run bench -- 30000 double-dqn pong",
+    "bench:all": "npm run bench -- 30000 cem flappy && npm run bench -- 30000 genetic flappy && npm run bench -- 30000 hill-climb flappy && npm run bench -- 30000 random-search flappy && npm run bench -- 30000 double-dqn flappy && npm run bench -- 30000 q-learning flappy && npm run bench -- 30000 sarsa flappy && npm run bench -- 30000 reinforce flappy && npm run bench -- 30000 double-dqn pong && npm run bench -- 30000 sarsa pong",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vite": "8.0.16"
+  }
+}
