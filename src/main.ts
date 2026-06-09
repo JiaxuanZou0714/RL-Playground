@@ -978,9 +978,30 @@ function drawChart(
   }
   context.stroke();
 
-  // 建立曲线路径
-  const path = new Path2D();
+  // 计算平滑后的数据 (EMA)
+  const smoothingWeight = 0.15; // 平滑系数
+  let currentEma = points.length > 0 ? points[0].distance : 0;
+  const smoothedPoints = points.map(point => {
+    // 简单的指数移动平均 (EMA)
+    currentEma = currentEma * (1 - smoothingWeight) + point.distance * smoothingWeight;
+    return { step: point.step, distance: currentEma };
+  });
+
+  // 绘制原始数据的淡色折线
+  const rawPath = new Path2D();
   points.forEach((point, index) => {
+    const x = left + ((point.step - minStep) / Math.max(1, maxStep - minStep)) * plotWidth;
+    const y = top + plotHeight - (point.distance / maxDistance) * plotHeight;
+    if (index === 0) rawPath.moveTo(x, y);
+    else rawPath.lineTo(x, y);
+  });
+  context.strokeStyle = "rgba(214, 77, 54, 0.25)";
+  context.lineWidth = 1;
+  context.stroke(rawPath);
+
+  // 建立平滑曲线路径
+  const path = new Path2D();
+  smoothedPoints.forEach((point, index) => {
     const x =
       left + ((point.step - minStep) / Math.max(1, maxStep - minStep)) * plotWidth;
     const y = top + plotHeight - (point.distance / maxDistance) * plotHeight;
@@ -992,9 +1013,9 @@ function drawChart(
   });
 
   // 绘制渐变填充背景
-  if (points.length > 0) {
+  if (smoothedPoints.length > 0) {
     const fillPath = new Path2D(path);
-    const lastPoint = points[points.length - 1];
+    const lastPoint = smoothedPoints[smoothedPoints.length - 1];
     const lastX = left + ((lastPoint.step - minStep) / Math.max(1, maxStep - minStep)) * plotWidth;
     fillPath.lineTo(lastX, top + plotHeight);
     fillPath.lineTo(left, top + plotHeight);
