@@ -27,9 +27,11 @@ import {
   huberLoss,
   maxQ,
   pushEval,
+  sampleRandomAction,
   sampleSoftmaxPolicy,
   softmaxPolicy
 } from "./learningCore.ts";
+import { AlphaZeroRuntime } from "./alphaZero.ts";
 
 export interface RuntimeTrainer {
   readonly evalHistory: EvalPoint[];
@@ -44,6 +46,9 @@ export interface RuntimeTrainer {
 }
 
 export function createRuntimeTrainer(config: TrainingConfig): RuntimeTrainer {
+  if (config.algorithm === "alpha-zero") {
+    return new AlphaZeroRuntime(config);
+  }
   if (config.algorithm === "genetic") {
     return new LinearPolicySearchRuntime(config, "genetic");
   }
@@ -66,6 +71,10 @@ export function createRuntimeTrainer(config: TrainingConfig): RuntimeTrainer {
     return new ReinforceRuntime(config);
   }
   return new CemRuntime(config);
+}
+
+function rewardBootstrapSign(environment: TrainingConfig["environment"]): number {
+  return environment === "gomoku" ? -1 : 1;
 }
 
 let runtimeSeedCounter = 0;
@@ -159,7 +168,8 @@ class LinearPolicySearchRuntime implements RuntimeTrainer {
       argmaxPolicy(
         this.bestWeights,
         this.demoObservation,
-        actionCountForEnvironment(this.config.environment)
+        actionCountForEnvironment(this.config.environment),
+        this.config.environment
       )
     );
     this.demoEnv.writeObservation(this.demoObservation);
@@ -332,7 +342,12 @@ class LinearPolicySearchRuntime implements RuntimeTrainer {
     env.writeObservation(this.observation);
     for (let step = 0; step < maxSteps; step += 1) {
       const done = env.step(
-        argmaxPolicy(weights, this.observation, actionCountForEnvironment(this.config.environment))
+        argmaxPolicy(
+          weights,
+          this.observation,
+          actionCountForEnvironment(this.config.environment),
+          this.config.environment
+        )
       );
       env.writeObservation(this.observation);
       if (done) {
@@ -401,7 +416,8 @@ class CemRuntime implements RuntimeTrainer {
     const done = this.demoEnv.step(
       this.trainer.bestPolicy.act(
         this.demoObservation,
-        actionCountForEnvironment(this.config.environment)
+        actionCountForEnvironment(this.config.environment),
+        this.config.environment
       )
     );
     this.demoEnv.writeObservation(this.demoObservation);
@@ -489,9 +505,15 @@ class QLearningRuntime implements RuntimeTrainer {
   }
 
   demoStep(): EnvironmentSnapshot {
-    const state = discretize(this.demoObservation);
+    const state = discretize(this.demoObservation, this.config.environment);
     const done = this.demoEnv.step(
-      argmaxQ(this.q, state, actionCountForEnvironment(this.config.environment))
+      argmaxQ(
+        this.q,
+        state,
+        actionCountForEnvironment(this.config.environment),
+        this.demoObservation,
+        this.config.environment
+      )
     );
     this.demoEnv.writeObservation(this.demoObservation);
     const snapshot = this.demoEnv.snapshot();
@@ -524,18 +546,25 @@ class QLearningRuntime implements RuntimeTrainer {
   }
 
   private trainStep(): void {
-    const stateIndex = discretize(this.observation);
+    const stateIndex = discretize(this.observation, this.config.environment);
     const action = this.selectAction(stateIndex, epsilonAt(this.steps, this.config));
     const done = this.env.step(action);
     this.env.writeObservation(this.nextObservation);
-    const nextIndex = discretize(this.nextObservation);
+    const nextIndex = discretize(this.nextObservation, this.config.environment);
     const reward = this.env.reward();
     const target =
       reward +
       (done
         ? 0
-        : this.config.gamma *
-          maxQ(this.q, nextIndex, actionCountForEnvironment(this.config.environment)));
+        : rewardBootstrapSign(this.config.environment) *
+          this.config.gamma *
+          maxQ(
+            this.q,
+            nextIndex,
+            actionCountForEnvironment(this.config.environment),
+            this.nextObservation,
+            this.config.environment
+          ));
     const qIndex = stateIndex + action;
     const error = target - this.q[qIndex];
     const alpha = this.config.learningRate * 120;
@@ -563,9 +592,9 @@ class QLearningRuntime implements RuntimeTrainer {
   private selectAction(stateIndex: number, epsilon: number): Action {
     const availableActions = actionCountForEnvironment(this.config.environment);
     if (this.rng.next() < epsilon) {
-      return this.rng.int(availableActions) as Action;
+      return sampleRandomAction(this.rng, this.observation, availableActions, this.config.environment);
     }
-    return argmaxQ(this.q, stateIndex, availableActions);
+    return argmaxQ(this.q, stateIndex, availableActions, this.observation, this.config.environment);
   }
 
   private evaluate(seed: number): number {
@@ -577,9 +606,15 @@ class QLearningRuntime implements RuntimeTrainer {
       let done = false;
       let guard = 0;
       while (!done && guard < 5000) {
-        const state = discretize(evalObservation);
+        const state = discretize(evalObservation, this.config.environment);
         done = evalEnv.step(
-          argmaxQ(this.q, state, actionCountForEnvironment(this.config.environment))
+          argmaxQ(
+            this.q,
+            state,
+            actionCountForEnvironment(this.config.environment),
+            evalObservation,
+            this.config.environment
+          )
         );
         evalEnv.writeObservation(evalObservation);
         guard += 1;
@@ -648,9 +683,15 @@ class SarsaRuntime implements RuntimeTrainer {
   }
 
   demoStep(): EnvironmentSnapshot {
-    const state = discretize(this.demoObservation);
+    const state = discretize(this.demoObservation, this.config.environment);
     const done = this.demoEnv.step(
-      argmaxQ(this.q, state, actionCountForEnvironment(this.config.environment))
+      argmaxQ(
+        this.q,
+        state,
+        actionCountForEnvironment(this.config.environment),
+        this.demoObservation,
+        this.config.environment
+      )
     );
     this.demoEnv.writeObservation(this.demoObservation);
     const snapshot = this.demoEnv.snapshot();
@@ -683,17 +724,25 @@ class SarsaRuntime implements RuntimeTrainer {
   }
 
   private trainStep(): void {
-    const stateIndex = discretize(this.observation);
+    const stateIndex = discretize(this.observation, this.config.environment);
     const action =
-      this.currentAction ?? this.selectAction(stateIndex, epsilonAt(this.steps, this.config));
+      this.currentAction ??
+      this.selectAction(this.observation, stateIndex, epsilonAt(this.steps, this.config));
     const done = this.env.step(action);
     this.env.writeObservation(this.nextObservation);
-    const nextIndex = discretize(this.nextObservation);
+    const nextIndex = discretize(this.nextObservation, this.config.environment);
     let nextAction: Action = 0;
     let target = this.env.reward();
     if (!done) {
-      nextAction = this.selectAction(nextIndex, epsilonAt(this.steps + 1, this.config));
-      target += this.config.gamma * this.q[nextIndex + nextAction];
+      nextAction = this.selectAction(
+        this.nextObservation,
+        nextIndex,
+        epsilonAt(this.steps + 1, this.config)
+      );
+      target +=
+        rewardBootstrapSign(this.config.environment) *
+        this.config.gamma *
+        this.q[nextIndex + nextAction];
     }
 
     const qIndex = stateIndex + action;
@@ -722,12 +771,12 @@ class SarsaRuntime implements RuntimeTrainer {
     }
   }
 
-  private selectAction(stateIndex: number, epsilon: number): Action {
+  private selectAction(observation: Float32Array, stateIndex: number, epsilon: number): Action {
     const availableActions = actionCountForEnvironment(this.config.environment);
     if (this.rng.next() < epsilon) {
-      return this.rng.int(availableActions) as Action;
+      return sampleRandomAction(this.rng, observation, availableActions, this.config.environment);
     }
-    return argmaxQ(this.q, stateIndex, availableActions);
+    return argmaxQ(this.q, stateIndex, availableActions, observation, this.config.environment);
   }
 
   private evaluate(seed: number): number {
@@ -739,9 +788,15 @@ class SarsaRuntime implements RuntimeTrainer {
       let done = false;
       let guard = 0;
       while (!done && guard < 5000) {
-        const state = discretize(evalObservation);
+        const state = discretize(evalObservation, this.config.environment);
         done = evalEnv.step(
-          argmaxQ(this.q, state, actionCountForEnvironment(this.config.environment))
+          argmaxQ(
+            this.q,
+            state,
+            actionCountForEnvironment(this.config.environment),
+            evalObservation,
+            this.config.environment
+          )
         );
         evalEnv.writeObservation(evalObservation);
         guard += 1;
@@ -821,7 +876,12 @@ class DoubleDqnRuntime implements RuntimeTrainer {
   demoStep(): EnvironmentSnapshot {
     this.online.predict(this.demoObservation, this.demoQ);
     const done = this.demoEnv.step(
-      argmaxValues(this.demoQ, actionCountForEnvironment(this.config.environment))
+      argmaxValues(
+        this.demoQ,
+        actionCountForEnvironment(this.config.environment),
+        this.demoObservation,
+        this.config.environment
+      )
     );
     this.demoEnv.writeObservation(this.demoObservation);
     const snapshot = this.demoEnv.snapshot();
@@ -889,10 +949,10 @@ class DoubleDqnRuntime implements RuntimeTrainer {
   private selectAction(observation: Float32Array, epsilon: number): Action {
     const availableActions = actionCountForEnvironment(this.config.environment);
     if (this.rng.next() < epsilon) {
-      return this.rng.int(availableActions) as Action;
+      return sampleRandomAction(this.rng, observation, availableActions, this.config.environment);
     }
     this.online.predict(observation, this.q);
-    return argmaxValues(this.q, availableActions);
+    return argmaxValues(this.q, availableActions, observation, this.config.environment);
   }
 
   private trainBatch(): number {
@@ -910,10 +970,17 @@ class DoubleDqnRuntime implements RuntimeTrainer {
       this.target.predict(this.batchNextState, this.nextTarget);
       const bestNext = argmaxValues(
         this.nextOnline,
-        actionCountForEnvironment(this.config.environment)
+        actionCountForEnvironment(this.config.environment),
+        this.batchNextState,
+        this.config.environment
       );
       const targetValue =
-        sample.reward + (sample.done ? 0 : this.config.gamma * this.nextTarget[bestNext]);
+        sample.reward +
+        (sample.done
+          ? 0
+          : rewardBootstrapSign(this.config.environment) *
+            this.config.gamma *
+            this.nextTarget[bestNext]);
       this.online.forward(this.batchState);
       const prediction = this.online.output(sample.action);
       const error = prediction - targetValue;
@@ -936,7 +1003,12 @@ class DoubleDqnRuntime implements RuntimeTrainer {
       while (!done && guard < 5000) {
         this.online.predict(evalObservation, this.q);
         done = evalEnv.step(
-          argmaxValues(this.q, actionCountForEnvironment(this.config.environment))
+          argmaxValues(
+            this.q,
+            actionCountForEnvironment(this.config.environment),
+            evalObservation,
+            this.config.environment
+          )
         );
         evalEnv.writeObservation(evalObservation);
         guard += 1;
@@ -1028,7 +1100,8 @@ class ReinforceRuntime implements RuntimeTrainer {
       argmaxPolicy(
         this.weights,
         this.demoObservation,
-        actionCountForEnvironment(this.config.environment)
+        actionCountForEnvironment(this.config.environment),
+        this.config.environment
       )
     );
     this.demoEnv.writeObservation(this.demoObservation);
@@ -1068,7 +1141,8 @@ class ReinforceRuntime implements RuntimeTrainer {
       this.observation,
       this.actionProbabilities,
       this.rng,
-      actionCountForEnvironment(this.config.environment)
+      actionCountForEnvironment(this.config.environment),
+      this.config.environment
     );
     this.episodeActions[this.episodeLength] = action;
     const done = this.env.step(action);
@@ -1095,8 +1169,9 @@ class ReinforceRuntime implements RuntimeTrainer {
   private finishEpisode(): void {
     this.grad.fill(0);
     let returnValue = 0;
+    const gamma = this.config.gamma * rewardBootstrapSign(this.config.environment);
     for (let i = this.episodeLength - 1; i >= 0; i -= 1) {
-      returnValue = this.episodeRewards[i] + this.config.gamma * returnValue;
+      returnValue = this.episodeRewards[i] + gamma * returnValue;
       this.episodeReturns[i] = returnValue;
     }
     this.lastReturn = this.episodeReturns[0] ?? 0;
@@ -1108,7 +1183,13 @@ class ReinforceRuntime implements RuntimeTrainer {
       );
       const action = this.episodeActions[i];
       const availableActions = actionCountForEnvironment(this.config.environment);
-      softmaxPolicy(this.weights, this.stateScratch, this.actionProbabilities, availableActions);
+      softmaxPolicy(
+        this.weights,
+        this.stateScratch,
+        this.actionProbabilities,
+        availableActions,
+        this.config.environment
+      );
       for (let candidateAction = 0; candidateAction < availableActions; candidateAction += 1) {
         const coefficient =
           (this.actionProbabilities[candidateAction] - (candidateAction === action ? 1 : 0)) *
@@ -1144,7 +1225,12 @@ class ReinforceRuntime implements RuntimeTrainer {
       let guard = 0;
       while (!done && guard < 5000) {
         done = evalEnv.step(
-          argmaxPolicy(this.weights, evalObservation, actionCountForEnvironment(this.config.environment))
+          argmaxPolicy(
+            this.weights,
+            evalObservation,
+            actionCountForEnvironment(this.config.environment),
+            this.config.environment
+          )
         );
         evalEnv.writeObservation(evalObservation);
         guard += 1;
@@ -1154,4 +1240,3 @@ class ReinforceRuntime implements RuntimeTrainer {
     return total / this.config.evalRuns;
   }
 }
-

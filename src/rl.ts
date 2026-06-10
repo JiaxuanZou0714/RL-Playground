@@ -1,3 +1,19 @@
+import {
+  GOMOKU_CELLS,
+  GOMOKU_SIZE,
+  type MutableGomokuState,
+  applyGomokuMove,
+  type GomokuWinner,
+  gomokuPatternScore,
+  nearestLegalGomokuAction,
+  normalizeGomokuAction,
+  oppositePlayer,
+  resetGomokuState
+} from "./gomoku.ts";
+
+export { GOMOKU_CELLS, GOMOKU_SIZE } from "./gomoku.ts";
+export type { GomokuWinner } from "./gomoku.ts";
+
 export const SCREEN_WIDTH = 800;
 export const SCREEN_HEIGHT = 600;
 export const GROUND_HEIGHT = 100;
@@ -21,21 +37,22 @@ export const PONG_PADDLE_SPEED = 380;
 export const PONG_BALL_RADIUS = 10;
 export const PONG_BALL_SPEED = 310;
 
-export const OBSERVATION_SIZE = 6;
-export const ACTION_COUNT = 3;
+export const OBSERVATION_SIZE = GOMOKU_CELLS;
+export const ACTION_COUNT = GOMOKU_CELLS;
 export const POLICY_SIZE = ACTION_COUNT * (OBSERVATION_SIZE + 1);
 
-export type Action = 0 | 1 | 2;
+export type Action = number;
 export type AlgorithmId =
   | "cem"
   | "genetic"
   | "hill-climb"
   | "random-search"
+  | "alpha-zero"
   | "double-dqn"
   | "q-learning"
   | "sarsa"
   | "reinforce";
-export type EnvironmentId = "flappy" | "pong";
+export type EnvironmentId = "flappy" | "pong" | "gomoku";
 
 export interface PipeSnapshot {
   x: number;
@@ -64,7 +81,19 @@ export interface PongSnapshot {
   lastReward: number;
 }
 
-export type EnvironmentSnapshot = FlappySnapshot | PongSnapshot;
+export interface GomokuSnapshot {
+  kind: "gomoku";
+  size: number;
+  board: number[];
+  currentPlayer: 1 | -1;
+  lastMove: number | null;
+  winner: GomokuWinner;
+  moves: number;
+  score: number;
+  lastReward: number;
+}
+
+export type EnvironmentSnapshot = FlappySnapshot | PongSnapshot | GomokuSnapshot;
 
 export interface LearningEnvironment {
   reset(seed: number): void;
@@ -117,6 +146,46 @@ export interface TrainerStats {
   objective: number;
   exploration: number;
   replaySize: number;
+  policyLoss?: number;
+  valueLoss?: number;
+  policyEntropy?: number;
+  searchValue?: number;
+  evalWinRate?: number;
+  evalDrawRate?: number;
+  evalLossRate?: number;
+  evalAverageMoves?: number;
+  evalGames?: number;
+  evalHeuristicWinRate?: number;
+  evalHeuristicDrawRate?: number;
+  evalHeuristicLossRate?: number;
+  evalBlackWinRate?: number;
+  evalBlackDrawRate?: number;
+  evalBlackLossRate?: number;
+  evalBlackScore?: number;
+  evalWhiteWinRate?: number;
+  evalWhiteDrawRate?: number;
+  evalWhiteLossRate?: number;
+  evalWhiteScore?: number;
+  evalValueMse?: number;
+  evalValueSignAccuracy?: number;
+  evalValueSamples?: number;
+  evalRandomWinRate?: number;
+  evalRandomDrawRate?: number;
+  evalRandomLossRate?: number;
+  evalChampionWinRate?: number;
+  evalChampionDrawRate?: number;
+  evalChampionLossRate?: number;
+  evalChampionScore?: number;
+  evalChampionGames?: number;
+  evalChampionBlackWinRate?: number;
+  evalChampionBlackDrawRate?: number;
+  evalChampionBlackLossRate?: number;
+  evalChampionBlackScore?: number;
+  evalChampionWhiteWinRate?: number;
+  evalChampionWhiteDrawRate?: number;
+  evalChampionWhiteLossRate?: number;
+  evalChampionWhiteScore?: number;
+  championPromotions?: number;
   sps: number;
 }
 
@@ -136,33 +205,144 @@ export interface CemGenerationResult {
   bestEvalDistance: number;
 }
 
-export function defaultTrainingConfig(): TrainingConfig {
-  return {
-    environment: "flappy",
-    algorithm: "cem",
+type TrainingDefaults = Partial<Omit<TrainingConfig, "environment" | "algorithm">>;
+
+const BASE_TRAINING_CONFIG: Omit<TrainingConfig, "environment" | "algorithm"> = {
+  populationSize: 48,
+  eliteSize: 8,
+  initialStd: 1.2,
+  minStd: 0.05,
+  stdDecay: 0.9,
+  maxEpisodeSteps: 1200,
+  evalRuns: 10,
+  candidatesPerBurst: 4,
+  trainBudgetMs: 12,
+  replayCapacity: 20000,
+  batchSize: 16,
+  warmupSteps: 500,
+  gamma: 0.99,
+  learningRate: 0.001,
+  epsilonStart: 1,
+  epsilonMin: 0.03,
+  epsilonDecaySteps: 12000,
+  targetUpdateSteps: 600,
+  trainEverySteps: 2
+};
+
+const GOMOKU_COMMON_DEFAULTS: TrainingDefaults = {
+  maxEpisodeSteps: GOMOKU_CELLS,
+  evalRuns: 20,
+  trainBudgetMs: 18,
+  gamma: 0.97,
+  epsilonStart: 1,
+  epsilonMin: 0.08,
+  epsilonDecaySteps: 60000
+};
+
+const GOMOKU_ALGORITHM_DEFAULTS: Record<AlgorithmId, TrainingDefaults> = {
+  cem: {
+    populationSize: 160,
+    eliteSize: 24,
+    initialStd: 0.65,
+    minStd: 0.02,
+    stdDecay: 0.96,
+    candidatesPerBurst: 2
+  },
+  genetic: {
+    populationSize: 160,
+    eliteSize: 32,
+    initialStd: 0.42,
+    minStd: 0.02,
+    stdDecay: 0.98,
+    candidatesPerBurst: 2
+  },
+  "hill-climb": {
     populationSize: 48,
     eliteSize: 8,
-    initialStd: 1.2,
-    minStd: 0.05,
-    stdDecay: 0.9,
-    maxEpisodeSteps: 1200,
-    evalRuns: 10,
-    candidatesPerBurst: 4,
-    trainBudgetMs: 12,
-    replayCapacity: 20000,
-    batchSize: 16,
-    warmupSteps: 500,
-    gamma: 0.99,
-    learningRate: 0.001,
-    epsilonStart: 1,
-    epsilonMin: 0.03,
-    epsilonDecaySteps: 12000,
-    targetUpdateSteps: 600,
+    initialStd: 0.32,
+    minStd: 0.01,
+    stdDecay: 0.985,
+    candidatesPerBurst: 4
+  },
+  "random-search": {
+    populationSize: 96,
+    eliteSize: 8,
+    initialStd: 0.8,
+    minStd: 0.02,
+    stdDecay: 1,
+    candidatesPerBurst: 4
+  },
+  "alpha-zero": {
+    populationSize: 20,
+    eliteSize: 8,
+    evalRuns: 16,
+    replayCapacity: 4096,
+    batchSize: 32,
+    learningRate: 0.0016,
+    gamma: 0.999,
+    targetUpdateSteps: 1000,
+    trainEverySteps: 1
+  },
+  "double-dqn": {
+    replayCapacity: 40000,
+    batchSize: 32,
+    warmupSteps: 1000,
+    learningRate: 0.0006,
+    epsilonMin: 0.06,
+    epsilonDecaySteps: 70000,
+    targetUpdateSteps: 500,
     trainEverySteps: 2
+  },
+  "q-learning": {
+    learningRate: 0.00045,
+    epsilonMin: 0.08,
+    epsilonDecaySteps: 70000,
+    gamma: 0.96
+  },
+  sarsa: {
+    learningRate: 0.0004,
+    epsilonMin: 0.1,
+    epsilonDecaySteps: 80000,
+    gamma: 0.96
+  },
+  reinforce: {
+    learningRate: 0.00035,
+    gamma: 0.94,
+    epsilonMin: 0.08,
+    epsilonDecaySteps: 60000
+  }
+};
+
+export function defaultTrainingConfig(
+  environment: EnvironmentId = "flappy",
+  algorithm: AlgorithmId = defaultAlgorithmForEnvironment(environment)
+): TrainingConfig {
+  const selectedAlgorithm =
+    environment !== "gomoku" && algorithm === "alpha-zero" ? "cem" : algorithm;
+  const defaults =
+    environment === "gomoku"
+      ? {
+          ...BASE_TRAINING_CONFIG,
+          ...GOMOKU_COMMON_DEFAULTS,
+          ...GOMOKU_ALGORITHM_DEFAULTS[selectedAlgorithm]
+        }
+      : BASE_TRAINING_CONFIG;
+
+  return {
+    ...defaults,
+    environment,
+    algorithm: selectedAlgorithm
   };
 }
 
+export function defaultAlgorithmForEnvironment(environment: EnvironmentId): AlgorithmId {
+  return environment === "gomoku" ? "alpha-zero" : "cem";
+}
+
 export function createEnvironment(environment: EnvironmentId, seed: number): LearningEnvironment {
+  if (environment === "gomoku") {
+    return new GomokuEnv(seed);
+  }
   if (environment === "pong") {
     return new PongEnv(seed);
   }
@@ -173,7 +353,24 @@ export function actionCountForEnvironment(environment: EnvironmentId): number {
   if (environment === "flappy") {
     return 2;
   }
+  if (environment === "gomoku") {
+    return GOMOKU_CELLS;
+  }
   return 3;
+}
+
+export function isActionLegal(
+  environment: EnvironmentId,
+  observation: Float32Array,
+  action: number
+): boolean {
+  if (action < 0 || action >= actionCountForEnvironment(environment)) {
+    return false;
+  }
+  if (environment === "gomoku") {
+    return Math.abs(observation[action] ?? 1) < 0.5;
+  }
+  return true;
 }
 
 export class Mulberry32 {
@@ -497,6 +694,102 @@ export class PongEnv implements LearningEnvironment {
       score: this.score,
       lastReward: this.lastReward
     };
+  }
+}
+
+export class GomokuEnv implements LearningEnvironment {
+  private rng = new Mulberry32(0);
+  private state: MutableGomokuState = {
+    board: new Int8Array(GOMOKU_CELLS),
+    player: 1,
+    moves: 0,
+    lastMove: null,
+    winner: null
+  };
+  private lastReward = 0;
+  private positionValue = 0;
+
+  constructor(seed = 0) {
+    this.reset(seed);
+  }
+
+  reset(seed: number): void {
+    this.rng = new Mulberry32(seed);
+    resetGomokuState(this.state);
+    this.lastReward = 0;
+    this.positionValue = 0;
+  }
+
+  step(action: Action): boolean {
+    if (this.state.winner !== null) {
+      return true;
+    }
+
+    const player = this.state.player;
+    const requested = normalizeGomokuAction(action);
+    const cell = nearestLegalGomokuAction(this.state.board, requested, () => this.rng.next());
+    const redirected = cell !== requested;
+
+    applyGomokuMove(this.state, cell);
+
+    if (this.state.winner !== null && this.state.winner !== "draw") {
+      this.positionValue = 2000;
+      this.lastReward = 1;
+      return true;
+    }
+
+    if (this.state.winner === "draw") {
+      this.positionValue = 1000;
+      this.lastReward = 0;
+      return true;
+    }
+
+    this.positionValue = this.scorePosition(player);
+    this.lastReward = clamp(this.positionValue / 2000, 0, 0.25) - (redirected ? 0.04 : 0);
+    return false;
+  }
+
+  writeObservation(target: Float32Array): void {
+    target.fill(0);
+    for (let i = 0; i < GOMOKU_CELLS; i += 1) {
+      const stone = this.state.board[i];
+      target[i] = stone === 0 ? 0 : stone === this.state.player ? 1 : -1;
+    }
+  }
+
+  reward(): number {
+    return this.lastReward;
+  }
+
+  distance(): number {
+    return this.positionValue;
+  }
+
+  currentScore(): number {
+    if (this.state.winner === "draw") {
+      return 0.5;
+    }
+    return this.state.winner === null ? 0 : 1;
+  }
+
+  snapshot(): GomokuSnapshot {
+    return {
+      kind: "gomoku",
+      size: GOMOKU_SIZE,
+      board: Array.from(this.state.board),
+      currentPlayer: this.state.player,
+      lastMove: this.state.lastMove,
+      winner: this.state.winner,
+      moves: this.state.moves,
+      score: this.currentScore(),
+      lastReward: this.lastReward
+    };
+  }
+
+  private scorePosition(player: 1 | -1): number {
+    const own = gomokuPatternScore(this.state.board, player);
+    const opponent = gomokuPatternScore(this.state.board, oppositePlayer(player));
+    return clamp(180 + this.state.moves * 7 + own - opponent * 0.35, 0, 1900);
   }
 }
 

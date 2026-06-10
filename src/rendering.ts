@@ -2,12 +2,14 @@ import {
   type EnvironmentId,
   type EnvironmentSnapshot,
   type FlappySnapshot,
+  type GomokuSnapshot,
   type PongSnapshot,
   type TrainerUpdate,
   BIRD_HEIGHT,
   BIRD_WIDTH,
   BLOCK_WIDTH,
   GAP_HEIGHT,
+  GOMOKU_SIZE,
   GROUND_HEIGHT,
   PONG_BALL_RADIUS,
   PONG_PADDLE_HEIGHT,
@@ -24,7 +26,9 @@ export function drawGame(
   snapshot: EnvironmentSnapshot | null,
   environment: EnvironmentId
 ): void {
-  if (snapshot?.kind === "pong" || (!snapshot && environment === "pong")) {
+  if (snapshot?.kind === "gomoku" || (!snapshot && environment === "gomoku")) {
+    drawGomoku(context, targetCanvas, snapshot?.kind === "gomoku" ? snapshot : null);
+  } else if (snapshot?.kind === "pong" || (!snapshot && environment === "pong")) {
     drawPong(context, targetCanvas, snapshot?.kind === "pong" ? snapshot : null);
   } else {
     drawFlappy(context, targetCanvas, snapshot?.kind === "flappy" ? snapshot : null);
@@ -298,6 +302,120 @@ function drawPong(
   context.font = "600 15px Inter, system-ui, sans-serif";
   context.fillText(`得分 ${score}`, 24, 34);
   context.fillText(`奖励 ${reward.toFixed(3)}`, 24, 58);
+
+  context.restore();
+}
+
+function drawGomoku(
+  context: CanvasRenderingContext2D,
+  targetCanvas: HTMLCanvasElement,
+  snapshot: GomokuSnapshot | null
+): void {
+  const width = targetCanvas.width;
+  const height = targetCanvas.height;
+  context.clearRect(0, 0, width, height);
+  context.save();
+  context.scale(width / SCREEN_WIDTH, height / SCREEN_HEIGHT);
+
+  context.fillStyle = "#101713";
+  context.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+  const boardSize = 500;
+  const cellSize = boardSize / GOMOKU_SIZE;
+  const boardLeft = 58;
+  const boardTop = 52;
+  const boardRight = boardLeft + boardSize;
+  const panelLeft = boardRight + 42;
+
+  context.fillStyle = "#d4ba78";
+  roundedRect(context, boardLeft - 12, boardTop - 12, boardSize + 24, boardSize + 24, 10);
+  context.fill();
+  context.fillStyle = "#e5cb86";
+  roundedRect(context, boardLeft, boardTop, boardSize, boardSize, 6);
+  context.fill();
+
+  context.strokeStyle = "rgba(40, 31, 18, 0.42)";
+  context.lineWidth = 1;
+  for (let i = 0; i <= GOMOKU_SIZE; i += 1) {
+    const x = boardLeft + i * cellSize;
+    const y = boardTop + i * cellSize;
+    context.beginPath();
+    context.moveTo(x, boardTop);
+    context.lineTo(x, boardTop + boardSize);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(boardLeft, y);
+    context.lineTo(boardLeft + boardSize, y);
+    context.stroke();
+  }
+
+  const board = snapshot?.board ?? [];
+  for (let index = 0; index < board.length; index += 1) {
+    const stone = board[index];
+    if (stone === 0) {
+      continue;
+    }
+    const row = Math.floor(index / GOMOKU_SIZE);
+    const col = index % GOMOKU_SIZE;
+    const cx = boardLeft + col * cellSize + cellSize / 2;
+    const cy = boardTop + row * cellSize + cellSize / 2;
+    const radius = cellSize * 0.34;
+
+    context.beginPath();
+    context.arc(cx + 2, cy + 3, radius, 0, Math.PI * 2);
+    context.fillStyle = "rgba(0, 0, 0, 0.18)";
+    context.fill();
+
+    const gradient = context.createRadialGradient(
+      cx - radius * 0.35,
+      cy - radius * 0.45,
+      radius * 0.15,
+      cx,
+      cy,
+      radius
+    );
+    if (stone === 1) {
+      gradient.addColorStop(0, "#55615b");
+      gradient.addColorStop(1, "#101312");
+    } else {
+      gradient.addColorStop(0, "#ffffff");
+      gradient.addColorStop(1, "#cbd5d7");
+    }
+    context.fillStyle = gradient;
+    context.beginPath();
+    context.arc(cx, cy, radius, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  if (snapshot?.lastMove !== null && snapshot?.lastMove !== undefined) {
+    const row = Math.floor(snapshot.lastMove / GOMOKU_SIZE);
+    const col = snapshot.lastMove % GOMOKU_SIZE;
+    const cx = boardLeft + col * cellSize + cellSize / 2;
+    const cy = boardTop + row * cellSize + cellSize / 2;
+    context.strokeStyle = "#5ed29c";
+    context.lineWidth = 3;
+    context.beginPath();
+    context.arc(cx, cy, cellSize * 0.42, 0, Math.PI * 2);
+    context.stroke();
+  }
+
+  context.fillStyle = "rgba(247, 251, 255, 0.92)";
+  context.font = "700 18px Inter, system-ui, sans-serif";
+  context.fillText("五子棋自对弈", panelLeft, 86);
+  context.font = "600 14px Inter, system-ui, sans-serif";
+  const winnerText = snapshot?.winner
+    ? snapshot.winner === "draw"
+      ? "结果 平局"
+      : `结果 ${snapshot.winner === "black" ? "黑方" : "白方"}胜`
+    : `轮到 ${snapshot?.currentPlayer === -1 ? "白方" : "黑方"}`;
+  context.fillText(winnerText, panelLeft, 126);
+  context.fillStyle = "rgba(247, 251, 255, 0.68)";
+  context.font = "500 13px Inter, system-ui, sans-serif";
+  context.fillText(`棋盘 ${GOMOKU_SIZE} × ${GOMOKU_SIZE}`, panelLeft, 164);
+  context.fillText(`落子 ${snapshot?.moves ?? 0}`, panelLeft, 188);
+  context.fillText(`奖励 ${(snapshot?.lastReward ?? 0).toFixed(3)}`, panelLeft, 212);
+  context.fillText("同一策略轮流执黑白", panelLeft, 266);
+  context.fillText("观察按当前方视角编码", panelLeft, 290);
 
   context.restore();
 }

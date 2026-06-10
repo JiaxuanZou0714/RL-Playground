@@ -136,7 +136,7 @@ function normalizeConfig(next: TrainingConfig): TrainingConfig {
     initialStd: clampNumber(next.initialStd, 0.05, 5),
     minStd: clampNumber(next.minStd, 0.001, 1),
     stdDecay: clampNumber(next.stdDecay, 0.5, 1),
-    maxEpisodeSteps: clampInt(next.maxEpisodeSteps, 200, 10000),
+    maxEpisodeSteps: clampInt(next.maxEpisodeSteps, 50, 10000),
     evalRuns: clampInt(next.evalRuns, 1, 50),
     candidatesPerBurst: clampInt(next.candidatesPerBurst, 1, 32),
     trainBudgetMs: clampNumber(next.trainBudgetMs, 2, 32),

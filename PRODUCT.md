@@ -10,7 +10,7 @@ RL-Playground is for students, researchers, and reinforcement-learning learners 
 
 ## Product Purpose
 
-The product is a Chinese teaching lab for comparing reinforcement-learning algorithms on Flappy Bird and Pong. It should make the training loop concrete: choose an environment, choose an algorithm, tune a few meaningful parameters, run training quickly, then watch the learned policy at normal speed. Success means the interface helps learners connect algorithm concepts with observable behavior without hiding the mechanics behind a decorative game shell.
+The product is a Chinese teaching lab for comparing reinforcement-learning algorithms on Flappy Bird, Pong, and 10x10 Gomoku self-play. It should make the training loop concrete: choose an environment, choose an algorithm, tune a few meaningful parameters, run training quickly, then watch the learned policy at normal speed. Success means the interface helps learners connect algorithm concepts with observable behavior without hiding the mechanics behind a decorative game shell.
 
 ## Brand Personality
 

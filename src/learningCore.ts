@@ -3,17 +3,176 @@ import {
   type EvalPoint,
   type TrainingConfig,
   ACTION_COUNT,
+  GOMOKU_CELLS,
   Mulberry32,
   OBSERVATION_SIZE,
   actionCountForEnvironment,
   clamp,
-  createEnvironment
+  createEnvironment,
+  isActionLegal
 } from "./rl.ts";
+import {
+  gomokuObservationCenterControl,
+  longestGomokuObservationLine
+} from "./gomoku.ts";
 
 export interface PolicyEvaluation {
   fitness: number;
   distance: number;
   steps: number;
+}
+
+export type OutcomeLabel = "win" | "draw" | "loss";
+
+export interface OutcomeCounts {
+  games: number;
+  wins: number;
+  draws: number;
+  losses: number;
+}
+
+export interface OutcomeRates {
+  winRate: number;
+  drawRate: number;
+  lossRate: number;
+}
+
+export interface OutcomeSummary extends OutcomeRates {
+  games: number;
+  score: number;
+}
+
+export interface ValuePredictionStats {
+  samples: number;
+  squaredError: number;
+  decisiveSamples: number;
+  correctSigns: number;
+}
+
+export interface ValuePredictionSummary {
+  mse: number;
+  signAccuracy: number;
+  samples: number;
+}
+
+export function newOutcomeCounts(): OutcomeCounts {
+  return {
+    games: 0,
+    wins: 0,
+    draws: 0,
+    losses: 0
+  };
+}
+
+export function recordOutcome(counts: OutcomeCounts, outcome: OutcomeLabel): void {
+  counts.games += 1;
+  if (outcome === "win") {
+    counts.wins += 1;
+  } else if (outcome === "draw") {
+    counts.draws += 1;
+  } else {
+    counts.losses += 1;
+  }
+}
+
+export function ratesFromCounts(counts: OutcomeCounts): OutcomeRates {
+  return {
+    winRate: safeRate(counts.wins, counts.games),
+    drawRate: safeRate(counts.draws, counts.games),
+    lossRate: safeRate(counts.losses, counts.games)
+  };
+}
+
+export function safeRate(count: number, total: number): number {
+  return total > 0 ? count / total : 0;
+}
+
+export function scoreOutcomeCounts(counts: OutcomeCounts): number {
+  return safeRate(counts.wins + counts.draws * 0.5, counts.games);
+}
+
+export function summarizeOutcomeCounts(counts: OutcomeCounts): OutcomeSummary {
+  const rates = ratesFromCounts(counts);
+  return {
+    games: counts.games,
+    winRate: rates.winRate,
+    drawRate: rates.drawRate,
+    lossRate: rates.lossRate,
+    score: scoreOutcomeCounts(counts)
+  };
+}
+
+export function newValuePredictionStats(): ValuePredictionStats {
+  return {
+    samples: 0,
+    squaredError: 0,
+    decisiveSamples: 0,
+    correctSigns: 0
+  };
+}
+
+export function recordValuePredictions(
+  stats: ValuePredictionStats,
+  predictions: readonly number[],
+  outcome: OutcomeLabel
+): void {
+  const target = valueTargetForOutcome(outcome);
+  for (const prediction of predictions) {
+    const clippedPrediction = clamp(prediction, -1, 1);
+    const error = clippedPrediction - target;
+    stats.samples += 1;
+    stats.squaredError += error * error;
+    if (target !== 0) {
+      stats.decisiveSamples += 1;
+      if (Math.sign(clippedPrediction) === Math.sign(target)) {
+        stats.correctSigns += 1;
+      }
+    }
+  }
+}
+
+export function summarizeValuePredictionStats(stats: ValuePredictionStats): ValuePredictionSummary {
+  return {
+    mse: stats.samples > 0 ? stats.squaredError / stats.samples : 0,
+    signAccuracy:
+      stats.decisiveSamples > 0 ? stats.correctSigns / stats.decisiveSamples : 0,
+    samples: stats.samples
+  };
+}
+
+function valueTargetForOutcome(outcome: OutcomeLabel): number {
+  if (outcome === "win") {
+    return 1;
+  }
+  if (outcome === "loss") {
+    return -1;
+  }
+  return 0;
+}
+
+export function normalizedDistributionEntropy(values: ArrayLike<number>): number {
+  let total = 0;
+  let active = 0;
+  for (let i = 0; i < values.length; i += 1) {
+    const value = values[i];
+    if (value > 0) {
+      total += value;
+      active += 1;
+    }
+  }
+  if (total <= 0 || active <= 1) {
+    return 0;
+  }
+
+  let entropy = 0;
+  for (let i = 0; i < values.length; i += 1) {
+    const value = values[i];
+    if (value > 0) {
+      const probability = value / total;
+      entropy -= probability * Math.log(probability);
+    }
+  }
+  return entropy / Math.log(active);
 }
 
 export class ReplayBuffer {
@@ -112,11 +271,11 @@ export class Mlp {
   private t = 0;
 
   constructor(rng: Mulberry32) {
-    this.w1 = initWeights(Mlp.HIDDEN1 * OBSERVATION_SIZE, OBSERVATION_SIZE, rng);
+    this.w1 = initNormalWeights(Mlp.HIDDEN1 * OBSERVATION_SIZE, OBSERVATION_SIZE, rng, 2);
     this.b1 = new Float32Array(Mlp.HIDDEN1);
-    this.w2 = initWeights(Mlp.HIDDEN2 * Mlp.HIDDEN1, Mlp.HIDDEN1, rng);
+    this.w2 = initNormalWeights(Mlp.HIDDEN2 * Mlp.HIDDEN1, Mlp.HIDDEN1, rng, 2);
     this.b2 = new Float32Array(Mlp.HIDDEN2);
-    this.w3 = initWeights(ACTION_COUNT * Mlp.HIDDEN2, Mlp.HIDDEN2, rng);
+    this.w3 = initNormalWeights(ACTION_COUNT * Mlp.HIDDEN2, Mlp.HIDDEN2, rng, 2);
     this.b3 = new Float32Array(ACTION_COUNT);
     this.gw1 = new Float32Array(this.w1.length);
     this.gb1 = new Float32Array(this.b1.length);
@@ -213,7 +372,14 @@ export class Mlp {
   }
 }
 
-export function discretize(observation: Float32Array): number {
+export function discretize(
+  observation: Float32Array,
+  environment: TrainingConfig["environment"] = "flappy"
+): number {
+  if (environment === "gomoku") {
+    return discretizeGomoku(observation);
+  }
+
   const yBins = 16;
   const vyBins = 9;
   const dxBins = 16;
@@ -231,27 +397,65 @@ export function discretize(observation: Float32Array): number {
   return (((y * vyBins + vy) * dxBins + dx) * offBins + off) * ACTION_COUNT;
 }
 
+function discretizeGomoku(observation: Float32Array): number {
+  let ownStones = 0;
+  let opponentStones = 0;
+  for (let i = 0; i < GOMOKU_CELLS; i += 1) {
+    if (observation[i] > 0.5) {
+      ownStones += 1;
+    } else if (observation[i] < -0.5) {
+      opponentStones += 1;
+    }
+  }
+
+  const ownBin = Math.min(9, Math.floor(ownStones / 5));
+  const opponentBin = Math.min(9, Math.floor(opponentStones / 5));
+  const ownLine = Math.min(4, longestGomokuObservationLine(observation, 1));
+  const opponentLine = Math.min(4, longestGomokuObservationLine(observation, -1));
+  const center = gomokuObservationCenterControl(observation);
+  return ((((ownBin * 10 + opponentBin) * 5 + ownLine) * 5 + opponentLine) * 3 + center) *
+    ACTION_COUNT;
+}
+
 export function epsilonAt(step: number, config: TrainingConfig): number {
   const decay = Math.exp(-step / Math.max(1, config.epsilonDecaySteps));
   return config.epsilonMin + (config.epsilonStart - config.epsilonMin) * decay;
 }
 
-export function maxQ(values: Float32Array, stateIndex: number, availableActions: number): number {
+export function exponentialProgress(step: number, scale: number): number {
+  return clamp(1 - Math.exp(-step / Math.max(1, scale)), 0, 1);
+}
+
+export function maxQ(
+  values: Float32Array,
+  stateIndex: number,
+  availableActions: number,
+  observation?: Float32Array,
+  environment?: TrainingConfig["environment"]
+): number {
   let best = Number.NEGATIVE_INFINITY;
   for (let action = 0; action < availableActions; action += 1) {
+    if (!canUseAction(action, availableActions, observation, environment)) {
+      continue;
+    }
     best = Math.max(best, values[stateIndex + action]);
   }
-  return best;
+  return best === Number.NEGATIVE_INFINITY ? values[stateIndex] : best;
 }
 
 export function argmaxQ(
   values: Float32Array,
   stateIndex: number,
-  availableActions: number
+  availableActions: number,
+  observation?: Float32Array,
+  environment?: TrainingConfig["environment"]
 ): Action {
   let bestAction = 0;
   let best = Number.NEGATIVE_INFINITY;
   for (let action = 0; action < availableActions; action += 1) {
+    if (!canUseAction(action, availableActions, observation, environment)) {
+      continue;
+    }
     const value = values[stateIndex + action];
     if (value > best) {
       best = value;
@@ -261,10 +465,18 @@ export function argmaxQ(
   return bestAction as Action;
 }
 
-export function argmaxValues(values: Float32Array, availableActions: number): Action {
+export function argmaxValues(
+  values: Float32Array,
+  availableActions: number,
+  observation?: Float32Array,
+  environment?: TrainingConfig["environment"]
+): Action {
   let bestAction = 0;
   let best = Number.NEGATIVE_INFINITY;
   for (let action = 0; action < availableActions; action += 1) {
+    if (!canUseAction(action, availableActions, observation, environment)) {
+      continue;
+    }
     if (values[action] > best) {
       best = values[action];
       bestAction = action;
@@ -277,27 +489,43 @@ export function softmaxPolicy(
   weights: Float32Array,
   observation: Float32Array,
   probabilities: Float32Array,
-  availableActions: number
+  availableActions: number,
+  environment: TrainingConfig["environment"] = "flappy"
 ): void {
   let maxScore = Number.NEGATIVE_INFINITY;
+  let legalCount = 0;
   for (let action = 0; action < availableActions; action += 1) {
+    if (!canUseAction(action, availableActions, observation, environment)) {
+      probabilities[action] = 0;
+      continue;
+    }
     const score = linearPolicyScore(weights, observation, action);
     probabilities[action] = score;
     maxScore = Math.max(maxScore, score);
+    legalCount += 1;
   }
   for (let action = availableActions; action < ACTION_COUNT; action += 1) {
     probabilities[action] = 0;
   }
+  if (legalCount === 0) {
+    probabilities.fill(0);
+    probabilities[0] = 1;
+    return;
+  }
 
   let normalizer = 0;
   for (let action = 0; action < availableActions; action += 1) {
+    if (!canUseAction(action, availableActions, observation, environment)) {
+      probabilities[action] = 0;
+      continue;
+    }
     const value = Math.exp(clamp(probabilities[action] - maxScore, -30, 30));
     probabilities[action] = value;
     normalizer += value;
   }
 
   for (let action = 0; action < availableActions; action += 1) {
-    probabilities[action] /= normalizer;
+    probabilities[action] = normalizer > 0 ? probabilities[action] / normalizer : 0;
   }
 }
 
@@ -306,27 +534,37 @@ export function sampleSoftmaxPolicy(
   observation: Float32Array,
   probabilities: Float32Array,
   rng: Mulberry32,
-  availableActions: number
+  availableActions: number,
+  environment: TrainingConfig["environment"] = "flappy"
 ): Action {
-  softmaxPolicy(weights, observation, probabilities, availableActions);
+  softmaxPolicy(weights, observation, probabilities, availableActions, environment);
   let sample = rng.next();
+  let fallbackAction = 0;
   for (let action = 0; action < availableActions; action += 1) {
+    if (probabilities[action] <= 0) {
+      continue;
+    }
+    fallbackAction = action;
     sample -= probabilities[action];
     if (sample <= 0) {
       return action as Action;
     }
   }
-  return (availableActions - 1) as Action;
+  return fallbackAction as Action;
 }
 
 export function argmaxPolicy(
   weights: Float32Array,
   observation: Float32Array,
-  availableActions: number
+  availableActions: number,
+  environment: TrainingConfig["environment"] = "flappy"
 ): Action {
   let bestAction = 0;
   let bestScore = Number.NEGATIVE_INFINITY;
   for (let action = 0; action < availableActions; action += 1) {
+    if (!canUseAction(action, availableActions, observation, environment)) {
+      continue;
+    }
     const score = linearPolicyScore(weights, observation, action);
     if (score > bestScore) {
       bestScore = score;
@@ -334,6 +572,35 @@ export function argmaxPolicy(
     }
   }
   return bestAction as Action;
+}
+
+export function sampleRandomAction(
+  rng: Mulberry32,
+  observation: Float32Array,
+  availableActions: number,
+  environment: TrainingConfig["environment"]
+): Action {
+  let legalCount = 0;
+  for (let action = 0; action < availableActions; action += 1) {
+    if (canUseAction(action, availableActions, observation, environment)) {
+      legalCount += 1;
+    }
+  }
+  if (legalCount === 0) {
+    return 0;
+  }
+
+  let selected = rng.int(legalCount);
+  for (let action = 0; action < availableActions; action += 1) {
+    if (!canUseAction(action, availableActions, observation, environment)) {
+      continue;
+    }
+    if (selected === 0) {
+      return action as Action;
+    }
+    selected -= 1;
+  }
+  return 0;
 }
 
 export function evaluateLinearPolicy(
@@ -348,7 +615,9 @@ export function evaluateLinearPolicy(
   let steps = 0;
   let done = false;
   while (!done && steps < maxEpisodeSteps) {
-    done = env.step(argmaxPolicy(weights, observation, actionCountForEnvironment(environment)));
+    done = env.step(
+      argmaxPolicy(weights, observation, actionCountForEnvironment(environment), environment)
+    );
     env.writeObservation(observation);
     steps += 1;
   }
@@ -412,9 +681,26 @@ function linearPolicyScore(
   return score;
 }
 
-function initWeights(size: number, fanIn: number, rng: Mulberry32): Float32Array {
+function canUseAction(
+  action: number,
+  availableActions: number,
+  observation?: Float32Array,
+  environment?: TrainingConfig["environment"]
+): boolean {
+  if (action < 0 || action >= availableActions) {
+    return false;
+  }
+  return !observation || !environment || isActionLegal(environment, observation, action);
+}
+
+export function initNormalWeights(
+  size: number,
+  fanIn: number,
+  rng: Mulberry32,
+  varianceScale: number
+): Float32Array {
   const weights = new Float32Array(size);
-  const scale = Math.sqrt(2 / fanIn);
+  const scale = Math.sqrt(varianceScale / fanIn);
   for (let i = 0; i < size; i += 1) {
     weights[i] = rng.normal() * scale;
   }

@@ -8,7 +8,8 @@ import {
   POLICY_SIZE,
   Mulberry32,
   actionCountForEnvironment,
-  createEnvironment
+  createEnvironment,
+  isActionLegal
 } from "./rl.ts";
 
 export class LinearPolicy {
@@ -18,8 +19,12 @@ export class LinearPolicy {
     this.weights.set(source);
   }
 
-  act(observation: Float32Array, availableActions = ACTION_COUNT): Action {
-    return policyAction(this.weights, observation, availableActions);
+  act(
+    observation: Float32Array,
+    availableActions = ACTION_COUNT,
+    environment: TrainingConfig["environment"] = "flappy"
+  ): Action {
+    return policyAction(this.weights, observation, availableActions, environment);
   }
 }
 
@@ -95,7 +100,11 @@ export class CemTrainer {
     env.writeObservation(this.observation);
     for (let i = 0; i < maxSteps; i += 1) {
       const done = env.step(
-        this.bestPolicy.act(this.observation, actionCountForEnvironment(this.config.environment))
+        this.bestPolicy.act(
+          this.observation,
+          actionCountForEnvironment(this.config.environment),
+          this.config.environment
+        )
       );
       env.writeObservation(this.observation);
       if (done) {
@@ -174,7 +183,12 @@ export class CemTrainer {
     let done = false;
     while (!done && steps < maxEpisodeSteps) {
       done = env.step(
-        policyAction(weights, this.observation, actionCountForEnvironment(this.config.environment))
+        policyAction(
+          weights,
+          this.observation,
+          actionCountForEnvironment(this.config.environment),
+          this.config.environment
+        )
       );
       env.writeObservation(this.observation);
       steps += 1;
@@ -205,11 +219,15 @@ export interface CemStepResult {
 function policyAction(
   weights: Float32Array,
   observation: Float32Array,
-  availableActions: number
+  availableActions: number,
+  environment: TrainingConfig["environment"]
 ): Action {
   let bestAction = 0;
   let bestScore = Number.NEGATIVE_INFINITY;
   for (let action = 0; action < availableActions; action += 1) {
+    if (!isActionLegal(environment, observation, action)) {
+      continue;
+    }
     const offset = action * (OBSERVATION_SIZE + 1);
     let score = weights[offset];
     for (let i = 0; i < OBSERVATION_SIZE; i += 1) {

@@ -12,15 +12,27 @@ export function bindRange(
 
   const sync = () => {
     const value = Number(input.value);
-    const displayValue = formatRangeValue(input, value);
-    output.textContent = `${displayValue}${suffix}`;
-    input.setAttribute("aria-valuenow", displayValue);
-    input.setAttribute("aria-valuetext", `${displayValue}${suffix}`);
+    syncRangeValue(input, output, suffix, value);
     onChange(value);
   };
 
   input.addEventListener("input", sync);
   sync();
+}
+
+export function setRangeValue(
+  inputId: string,
+  outputId: string,
+  suffix: string,
+  value: number
+): void {
+  const input = document.getElementById(inputId);
+  const output = document.getElementById(outputId);
+  if (!(input instanceof HTMLInputElement) || !(output instanceof HTMLOutputElement)) {
+    throw new Error(`Missing range control ${inputId}`);
+  }
+  input.value = String(value);
+  syncRangeValue(input, output, suffix, value);
 }
 
 export function getCanvas(id: string): HTMLCanvasElement {
@@ -75,4 +87,16 @@ function formatRangeValue(input: HTMLInputElement, value: number): string {
       .replace(/\.$/, "");
   }
   return String(value);
+}
+
+function syncRangeValue(
+  input: HTMLInputElement,
+  output: HTMLOutputElement,
+  suffix: string,
+  value: number
+): void {
+  const displayValue = formatRangeValue(input, value);
+  output.textContent = `${displayValue}${suffix}`;
+  input.setAttribute("aria-valuenow", displayValue);
+  input.setAttribute("aria-valuetext", `${displayValue}${suffix}`);
 }

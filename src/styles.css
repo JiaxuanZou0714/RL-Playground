@@ -29,6 +29,7 @@
   /* category colors — algorithm taxonomy only */
   --cat-evo:     oklch(44% 0.14 155);  /* green  */
   --cat-search:  oklch(48% 0.13 55);   /* amber  */
+  --cat-self:    oklch(45% 0.15 205);  /* cyan   */
   --cat-deep:    oklch(46% 0.15 240);  /* blue   */
   --cat-tab:     oklch(46% 0.14 295);  /* violet */
   --cat-pg:      oklch(46% 0.15 18);   /* rose   */
@@ -147,7 +148,7 @@ button.secondary-active {
 
 /* ── Topbar ── */
 .topbar {
-  height: 48px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -214,7 +215,7 @@ button.secondary-active {
 /* ── Shell ── */
 .shell {
   width: min(1500px, calc(100vw - 32px));
-  margin: 16px auto 0;
+  margin: 10px auto 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
   gap: 12px;
@@ -231,7 +232,7 @@ button.secondary-active {
 
 /* ── Stage toolbar ── */
 .stage-toolbar {
-  padding: 14px 18px;
+  padding: 10px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -261,6 +262,7 @@ button.secondary-active {
 .game-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 190px;
+  background: oklch(14% 0.004 220);
 }
 
 .simulation-frame {
@@ -268,6 +270,7 @@ button.secondary-active {
   display: grid;
   grid-template-rows: 26px auto;
   border-right: 1px solid var(--line);
+  background: oklch(14% 0.004 220);
 }
 
 .simulation-bar {
@@ -283,17 +286,21 @@ button.secondary-active {
 }
 
 #game-canvas {
-  width: 100%;
+  width: auto;
+  max-width: 100%;
+  height: clamp(260px, 43vh, 380px);
   aspect-ratio: 4 / 3;
   display: block;
+  justify-self: center;
   background: oklch(14% 0.004 220);
 }
 
 /* ── Metrics ── */
 .metrics {
-  padding: 10px 14px 6px;
+  padding: 8px 12px 4px;
   display: grid;
   align-content: start;
+  background: var(--base);
 }
 
 .metrics-title {
@@ -305,7 +312,7 @@ button.secondary-active {
 }
 
 .metric {
-  padding: 7px 0;
+  padding: 5px 0;
   border-bottom: 1px solid var(--line);
   display: grid;
   gap: 1px;
@@ -321,7 +328,7 @@ button.secondary-active {
 
 /* signal only on the two eval metrics — not every number */
 .metric strong {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
@@ -339,7 +346,7 @@ button.secondary-active {
 .sidepanel { display: grid; }
 
 .panel-section {
-  padding: 14px 16px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -402,14 +409,14 @@ output {
 
 .chart-section {
   border-top: 1px solid var(--line);
-  padding: 12px 0 0;
+  padding: 8px 0 0;
 }
 
 .chart-header {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding: 0 18px 8px;
+  padding: 0 16px 6px;
 }
 
 .chart-title {
@@ -425,6 +432,7 @@ output {
 
 #chart-svg {
   width: 100%;
+  height: clamp(150px, 22vh, 190px);
   display: block;
   border-top: 1px solid var(--line);
   font-family: "Inter", ui-sans-serif, sans-serif;
@@ -536,6 +544,9 @@ output {
 .algo-group.search .algo-group-dot    { background: var(--cat-search); }
 .algo-group.search .algo-group-label  { color: var(--cat-search); }
 
+.algo-group.self-play .algo-group-dot   { background: var(--cat-self); }
+.algo-group.self-play .algo-group-label { color: var(--cat-self); }
+
 .algo-group.deep-rl .algo-group-dot   { background: var(--cat-deep); }
 .algo-group.deep-rl .algo-group-label { color: var(--cat-deep); }
 
@@ -617,6 +628,7 @@ output {
 /* watch-point accent matches category */
 .algo-group.evolution .watch-point strong { color: var(--cat-evo); }
 .algo-group.search    .watch-point strong { color: var(--cat-search); }
+.algo-group.self-play .watch-point strong { color: var(--cat-self); }
 .algo-group.deep-rl   .watch-point strong { color: var(--cat-deep); }
 .algo-group.tabular   .watch-point strong { color: var(--cat-tab); }
 .algo-group.pg-rl     .watch-point strong { color: var(--cat-pg); }
